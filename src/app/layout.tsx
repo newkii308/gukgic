@@ -1,0 +1,74 @@
+import type { Metadata, Viewport } from 'next';
+import './globals.css';
+import { ThemeProvider } from '@/hooks/use-theme';
+import { I18nProvider } from '@/hooks/use-i18n';
+import { AuthProvider } from '@/hooks/use-auth';
+import { AppShell } from '@/components/layout/app-shell';
+
+export const metadata: Metadata = {
+  title: {
+    default: 'Friend Social App — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
+    template: '%s | Friend Social App',
+  },
+  description: 'Social platform for finding friends, sharing moments, and real-time chat designed for Lao Gen Z.',
+  keywords: ['Friend App Laos', 'ຫາເພື່ອນລາວ', 'Social Lao', 'Gen Z Laos', 'Vientiane', 'Luang Prabang', 'Find Friends'],
+  authors: [{ name: 'Friend Social Team' }],
+  metadataBase: new URL('https://friend-social.la'),
+  openGraph: {
+    title: 'Friend Social App — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
+    description: 'Find friends, share photos, send voice messages, and connect across Laos.',
+    url: 'https://friend-social.la',
+    siteName: 'Friend Social',
+    locale: 'lo_LA',
+    type: 'website',
+    images: [
+      {
+        url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=1200&auto=format&fit=crop&q=80',
+        width: 1200,
+        height: 630,
+        alt: 'Friend Social App Laos',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Friend Social App — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
+    description: 'Find friends, share photos, send voice messages, and connect across Laos.',
+    images: ['https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=1200&auto=format&fit=crop&q=80'],
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F8FAFC' },
+    { media: '(prefers-color-scheme: dark)', color: '#0B0F19' },
+  ],
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="lo" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body className="antialiased select-auto min-h-screen">
+        <ThemeProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <AppShell>{children}</AppShell>
+            </AuthProvider>
+          </I18nProvider>
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
