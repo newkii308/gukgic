@@ -31,6 +31,7 @@ export interface User {
   isSuspended?: boolean;
   settings?: UserSettings;
   createdAt: string;
+  updatedAt?: string;
   mutualFriendsCount?: number;
 }
 

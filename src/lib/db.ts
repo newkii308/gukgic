@@ -1013,6 +1013,16 @@ class RelationalDatabaseEngine {
     return message;
   }
 
+  deleteMessage(messageId: string, userId: string): boolean {
+    const idx = this.data.messages.findIndex((m) => m.id === messageId && m.senderId === userId);
+    if (idx !== -1) {
+      this.data.messages.splice(idx, 1);
+      this.saveToDisk();
+      return true;
+    }
+    return false;
+  }
+
   // --- Notifications ---
   getNotifications(userId: string): NotificationItem[] {
     return this.data.notifications
