@@ -7,6 +7,6 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get('q') || '';
   const currentUser = getCurrentUserFromRequest(req);
 
-  const users = db.discoverFriends(currentUser?.id || '', { search: q });
+  const users = db.searchUsers(q, currentUser?.id);
   return NextResponse.json({ users });
 }

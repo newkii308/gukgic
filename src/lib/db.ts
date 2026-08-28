@@ -46,7 +46,7 @@ const DEFAULT_SETTINGS: UserSettings = {
 };
 
 // Seed password hash for standard seed users: bcrypt hash of "password123"
-const SEED_PASSWORD_HASH = '$2a$10$wB5p6uV8G7J6r1QyL2Xzfe8gC9kZp.M7uT5aN4v8Y1W2e3R4t5Y6u'; // password123
+const SEED_PASSWORD_HASH = '$2a$10$74UhGy5fznp3roSq33RElOpmW6iSYkP27DrZrX1M4purSMmBo8uOi'; // password123
 
 const SEED_USERS: (User & { passwordHash: string })[] = [
   {
@@ -380,6 +380,12 @@ class RelationalDatabaseEngine {
         const parsed = JSON.parse(fileContent);
         if (parsed.users && parsed.posts) {
           this.data = { ...this.data, ...parsed };
+          // Update seed users to standard hash if outdated
+          this.data.users.forEach((u) => {
+            if (!u.passwordHash || u.passwordHash.length < 30 || u.passwordHash.includes('wB5p6uV8')) {
+              u.passwordHash = SEED_PASSWORD_HASH;
+            }
+          });
         }
       }
     } catch {
@@ -708,6 +714,29 @@ class RelationalDatabaseEngine {
     }
 
     return list;
+  }
+
+  searchUsers(query: string, currentUserId?: string): User[] {
+    const blockedIds = currentUserId
+      ? this.data.blocks
+          .filter((b) => b.blockerId === currentUserId || b.blockedId === currentUserId)
+          .map((b) => (b.blockerId === currentUserId ? b.blockedId : b.blockerId))
+      : [];
+
+    const q = query.toLowerCase().trim();
+    if (!q) return [];
+
+    return this.data.users
+      .filter((u) => !blockedIds.includes(u.id) && !u.isBanned)
+      .filter(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.username.toLowerCase().includes(q) ||
+          u.bio?.toLowerCase().includes(q) ||
+          u.interests.some((i) => i.toLowerCase().includes(q)) ||
+          u.city?.toLowerCase().includes(q)
+      )
+      .map(({ passwordHash, ...user }) => user);
   }
 
   // --- Posts & Feed ---
