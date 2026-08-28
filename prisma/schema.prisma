@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./gukgic.db"
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  username            String               @unique
+  name                String
+  passwordHash        String
+  avatar              String
+  coverImage          String?
+  bio                 String?
+  location            String?
+  city                String?
+  languages           String               @default("[\"ລາວ\",\"English\"]")
+  interests           String               @default("[\"Coffee\",\"Music\"]")
+  role                String               @default("user") // "user" | "moderator" | "admin"
+  isBanned            Boolean              @default(false)
+  isSuspended         Boolean              @default(false)
+  settings            String               @default("{\"profileVisibility\":\"public\",\"postVisibility\":\"public\",\"whoCanSendRequests\":\"everyone\",\"pushNotifications\":true,\"messageNotifications\":true,\"socialNotifications\":true}")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  posts               Post[]
+  comments            PostComment[]
+  likes               PostLike[]
+  sentFriendRequests  FriendRequest[]      @relation("SentRequests")
+  receivedFriendRequests FriendRequest[]   @relation("ReceivedRequests")
+  friendshipsAsUser1  Friendship[]         @relation("User1Friendships")
+  friendshipsAsUser2  Friendship[]         @relation("User2Friendships")
+  blocksAsBlocker     Block[]              @relation("Blocker")
+  blocksAsBlocked     Block[]              @relation("Blocked")
+  conversationMembers ConversationMember[]
+  sentMessages        Message[]            @relation("SentMessages")
+  notifications       Notification[]       @relation("UserNotifications")
+  sentNotifications   Notification[]       @relation("SenderNotifications")
+  reportsFiled        Report[]             @relation("Reporter")
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  user1Id   String
+  user2Id   String
+  createdAt DateTime @default(now())
+
+  user1     User     @relation("User1Friendships", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2     User     @relation("User2Friendships", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@unique([user1Id, user2Id])
+}
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  status     String   @default("pending") // "pending" | "accepted" | "rejected"
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+model Post {
+  id         String        @id @default(cuid())
+  userId     String
+  content    String
+  mediaUrl   String?
+  mediaType  String?       // "image" | "video"
+  isHidden   Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  author     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments   PostComment[]
+  likes      PostLike[]
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  isHidden  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id        String               @id @default(cuid())
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  members   ConversationMember[]
+  messages  Message[]
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  type           String       @default("text") // "text" | "voice" | "image"
+  mediaUrl       String?
+  duration       Int?
+  replyToId      String?
+  isRead         Boolean      @default(false)
+  isDelivered    Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  senderId  String?
+  type      String   // "friend_request" | "friend_accept" | "post_like" | "post_comment" | "message" | "system"
+  title     String
+  body      String
+  targetId  String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  sender    User?    @relation("SenderNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+}
+
+model Advertisement {
+  id          String   @id @default(cuid())
+  title       String
+  sponsor     String
+  description String
+  imageUrl    String
+  ctaText     String
+  targetUrl   String
+  badge       String   @default("Sponsored")
+  isActive    Boolean  @default(true)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id          String    @id @default(cuid())
+  targetType  String    // "user" | "post" | "comment" | "message"
+  targetId    String
+  reporterId  String
+  reason      String
+  details     String?
+  status      String    @default("pending") // "pending" | "resolved" | "dismissed"
+  actionTaken String    @default("none")    // "none" | "hidden" | "removed" | "warned" | "suspended" | "banned"
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  reporter    User      @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  adminName  String
+  action     String
+  targetType String
+  targetId   String
+  details    String
+  createdAt  DateTime @default(now())
+}

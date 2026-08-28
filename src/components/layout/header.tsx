@@ -15,13 +15,11 @@ import {
   Laptop,
   Languages,
   Sparkles,
-  UserCheck,
   User as UserIcon,
-  Edit3,
   Users,
   Settings as SettingsIcon,
   LogOut,
-  ChevronDown
+  LogIn
 } from 'lucide-react';
 import { LanguageCode, ThemeMode } from '@/types';
 
@@ -33,11 +31,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch }) => {
   const router = useRouter();
   const { language, setLanguage, t } = useI18n();
   const { theme, setTheme, resolvedTheme } = useTheme();
-  const { user, logout, switchDemoUser } = useAuth();
+  const { user, logout } = useAuth();
 
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
-  const [demoMenuOpen, setDemoMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
@@ -59,14 +56,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch }) => {
     zh: { label: '中文 (Chinese)', flag: '🇨🇳' },
     vi: { label: 'Tiếng Việt', flag: '🇻🇳' },
   };
-
-  const demoUsers = [
-    { id: 'user_me', name: 'Khampheng (You)', role: 'Admin / Vientiane' },
-    { id: 'user_1', name: 'Alouny Souvannavong', role: 'Vientiane' },
-    { id: 'user_2', name: 'Khamla Phommachan', role: 'Moderator / Luang Prabang' },
-    { id: 'user_3', name: 'Souphaphone Keomany', role: 'Vientiane' },
-    { id: 'user_5', name: 'Vilaphone Saysana', role: 'Savannakhet' },
-  ];
 
   return (
     <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 dark:bg-dark-bg/85 border-b border-slate-200/60 dark:border-slate-800/60 transition-colors">
@@ -109,44 +98,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch }) => {
           >
             <Search className="w-5 h-5" />
           </Button>
-
-          {/* Demo User Switcher (For Pair-Programming & Testing) */}
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDemoMenuOpen(!demoMenuOpen)}
-              className="text-xs hidden sm:flex items-center gap-1.5 py-1 px-2.5 h-8 border-primary-500/30 text-primary-600 dark:text-primary-400 bg-primary-50/50 dark:bg-primary-950/30 rounded-xl"
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Demo Accounts</span>
-            </Button>
-
-            {demoMenuOpen && (
-              <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-2 z-50 animate-scale-up">
-                <div className="px-2 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  Switch Active Account
-                </div>
-                {demoUsers.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      switchDemoUser(u.id);
-                      setDemoMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors ${
-                      user?.id === u.id
-                        ? 'bg-primary-50 dark:bg-primary-950/50 text-primary-600 font-semibold'
-                        : 'hover:bg-slate-100 dark:hover:bg-dark-elevated text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <span className="font-medium">{u.name}</span>
-                    <span className="text-[10px] text-slate-400">{u.role}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* Language Selector */}
           <div className="relative">
@@ -243,8 +194,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch }) => {
             )}
           </div>
 
-          {/* Strict User Profile Menu (Section 278: Profile Menu) */}
-          {user && (
+          {/* User Profile Menu / Login Button */}
+          {user ? (
             <div className="relative ml-1" ref={profileRef}>
               <button
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
@@ -262,13 +213,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch }) => {
 
               {profileMenuOpen && (
                 <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-2 z-50 animate-scale-up select-none">
-                  {/* Mini Header */}
                   <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800/80 mb-1">
                     <p className="text-xs font-bold text-slate-900 dark:text-dark-text truncate">{user.name}</p>
                     <p className="text-[11px] text-slate-400 truncate">@{user.username}</p>
                   </div>
 
-                  {/* Strictly User Navigation Items: View Profile, Edit Profile, Friends, Settings, Logout */}
                   <Link
                     href="/profile"
                     onClick={() => setProfileMenuOpen(false)}
@@ -311,6 +260,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch }) => {
                 </div>
               )}
             </div>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold transition-all shadow-sm"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
           )}
         </div>
       </div>

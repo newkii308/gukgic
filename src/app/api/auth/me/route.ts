@@ -4,7 +4,8 @@ import { getCurrentUserFromRequest } from '@/lib/auth';
 export async function GET(req: NextRequest) {
   const user = getCurrentUserFromRequest(req);
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
   }
+
   return NextResponse.json({ user });
 }

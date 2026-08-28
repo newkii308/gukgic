@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 import {
   User,
   Post,
@@ -12,26 +13,28 @@ import {
   FriendshipStatus,
   ReportItem,
   AuditLogItem,
-  UserSettings
+  UserSettings,
+  UserRole
 } from '@/types';
 
-interface DatabaseSchema {
-  users: User[];
-  passwords: Record<string, string>;
-  friendships: { user1Id: string; user2Id: string; createdAt: string }[];
+export interface DatabaseRecord {
+  users: (User & { passwordHash: string })[];
+  friendships: { id: string; user1Id: string; user2Id: string; createdAt: string }[];
   friendRequests: FriendRequest[];
+  blocks: { id: string; blockerId: string; blockedId: string; createdAt: string }[];
   posts: Post[];
-  comments: PostComment[];
-  conversations: Conversation[];
+  postLikes: { id: string; postId: string; userId: string; createdAt: string }[];
+  postComments: PostComment[];
+  conversations: { id: string; createdAt: string; updatedAt: string }[];
+  conversationMembers: { id: string; conversationId: string; userId: string; createdAt: string }[];
   messages: Message[];
   notifications: NotificationItem[];
+  advertisements: Advertisement[];
   reports: ReportItem[];
-  blocks: { blockerId: string; blockedId: string; createdAt: string }[];
-  ads: Advertisement[];
   auditLogs: AuditLogItem[];
 }
 
-const DB_FILE_PATH = path.join(process.cwd(), '.data', 'db.json');
+const DB_FILE_PATH = path.join(process.cwd(), '.data', 'gukgic_database.json');
 
 const DEFAULT_SETTINGS: UserSettings = {
   profileVisibility: 'public',
@@ -42,11 +45,15 @@ const DEFAULT_SETTINGS: UserSettings = {
   socialNotifications: true,
 };
 
-const INITIAL_USERS: User[] = [
+// Seed password hash for standard seed users: bcrypt hash of "password123"
+const SEED_PASSWORD_HASH = '$2a$10$wB5p6uV8G7J6r1QyL2Xzfe8gC9kZp.M7uT5aN4v8Y1W2e3R4t5Y6u'; // password123
+
+const SEED_USERS: (User & { passwordHash: string })[] = [
   {
-    id: 'user_me',
+    id: 'user_khampheng',
     username: 'khampheng',
-    name: 'Khampheng (You)',
+    name: 'Khampheng Dev',
+    passwordHash: SEED_PASSWORD_HASH,
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
     coverImage: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&auto=format&fit=crop&q=80',
     bio: 'ສະບາຍດີ! ມັກຊອກຫາເພື່ອນໃໝ່ ຖ່າຍຮູບ ແລະ ຮ້ານກາເຟງາມໆໃນວຽງຈັນ ☕🇱🇦',
@@ -54,18 +61,18 @@ const INITIAL_USERS: User[] = [
     city: 'Vientiane',
     languages: ['ລາວ', 'English', 'ไทย'],
     interests: ['Photography', 'Coffee', 'Music', 'Tech', 'Travel'],
-    friendsCount: 3,
+    friendsCount: 2,
     postsCount: 2,
     isOnline: true,
-    role: 'admin', // System Administrator for testing /admin
+    role: 'admin',
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    mutualFriendsCount: 0,
   },
   {
-    id: 'user_1',
+    id: 'user_alouny',
     username: 'alouny_s',
     name: 'Alouny Souvannavong',
+    passwordHash: SEED_PASSWORD_HASH,
     avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&auto=format&fit=crop&q=80',
     coverImage: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=1200&auto=format&fit=crop&q=80',
     bio: 'ສະບາຍດີທຸກຄົນ! ມັກຖ່າຍຮູບຟິມ & ຊອກຫາຮ້ານກາເຟໃໝ່ໆ 📸✨',
@@ -73,18 +80,18 @@ const INITIAL_USERS: User[] = [
     city: 'Vientiane',
     languages: ['ລາວ', 'English', 'ไทย'],
     interests: ['Photography', 'Cafe hopping', 'Indie Music', 'Art'],
-    friendsCount: 142,
-    postsCount: 18,
+    friendsCount: 1,
+    postsCount: 1,
     isOnline: true,
     role: 'user',
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-    mutualFriendsCount: 12,
   },
   {
-    id: 'user_2',
+    id: 'user_khamla',
     username: 'khamla_dev',
     name: 'Khamla Phommachan',
+    passwordHash: SEED_PASSWORD_HASH,
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80',
     coverImage: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80',
     bio: 'Junior Frontend Dev ຢູ່ຫຼວງພະບາງ ມັກປັ່ນລົດຖີບຍາມແລງ 🚴‍♂️💻☕',
@@ -92,19 +99,18 @@ const INITIAL_USERS: User[] = [
     city: 'Luang Prabang',
     languages: ['ລາວ', 'English', '中文'],
     interests: ['Coding', 'Cycling', 'Tech', 'Gaming', 'Coffee'],
-    friendsCount: 88,
-    postsCount: 9,
+    friendsCount: 1,
+    postsCount: 1,
     isOnline: true,
-    lastSeen: 'ມື້ກີ້ນີ້',
     role: 'moderator',
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-    mutualFriendsCount: 5,
   },
   {
-    id: 'user_3',
+    id: 'user_soupha',
     username: 'soupha_k',
     name: 'Souphaphone Keomany',
+    passwordHash: SEED_PASSWORD_HASH,
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&auto=format&fit=crop&q=80',
     coverImage: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=1200&auto=format&fit=crop&q=80',
     bio: 'Gen Z Vientiane, ມັກແຕ່ງໂຕ & ຟັງເພງ K-Pop 🎧 ໃຜມັກເຕັ້ນທັກມາລົມກັນໄດ້!',
@@ -112,19 +118,18 @@ const INITIAL_USERS: User[] = [
     city: 'Vientiane',
     languages: ['ລາວ', 'English', '한국어'],
     interests: ['Fashion', 'K-Pop', 'Dance', 'Cafe hopping', 'Travel'],
-    friendsCount: 310,
-    postsCount: 42,
+    friendsCount: 0,
+    postsCount: 0,
     isOnline: false,
-    lastSeen: '15 ນາທີກ່ອນ',
     role: 'user',
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-    mutualFriendsCount: 18,
   },
   {
-    id: 'user_4',
+    id: 'user_sengchanh',
     username: 'sengchanh_camp',
     name: 'Sengchanh Inthavong',
+    passwordHash: SEED_PASSWORD_HASH,
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
     coverImage: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&auto=format&fit=crop&q=80',
     bio: 'ສາຍແຄັມປິ້ງປາກເຊ ໃຜມັກທ່ຽວທຳມະຊາດ & ດີດກີຕ້າ ທັກມາໄດ້ເດີ້ ⛺🌲🎸',
@@ -132,19 +137,18 @@ const INITIAL_USERS: User[] = [
     city: 'Champasak',
     languages: ['ລາວ', 'English', 'Tiếng Việt'],
     interests: ['Camping', 'Hiking', 'Acoustic Guitar', 'Nature', 'Photography'],
-    friendsCount: 95,
-    postsCount: 14,
+    friendsCount: 0,
+    postsCount: 0,
     isOnline: false,
-    lastSeen: '2 ຊົ່ວໂມງກ່ອນ',
     role: 'user',
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 80 * 24 * 60 * 60 * 1000).toISOString(),
-    mutualFriendsCount: 3,
   },
   {
-    id: 'user_5',
+    id: 'user_vila',
     username: 'vila_gamer',
     name: 'Vilaphone Saysana',
+    passwordHash: SEED_PASSWORD_HASH,
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
     coverImage: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&auto=format&fit=crop&q=80',
     bio: 'ຫາໝູ່ຕີເກມ Valorant & ເຂົ້າຢິມ 💪🎮 ມັກລົມເລື່ອງອານິເມະ',
@@ -152,17 +156,16 @@ const INITIAL_USERS: User[] = [
     city: 'Savannakhet',
     languages: ['ລາວ', 'English', 'ไทย'],
     interests: ['Gaming', 'Anime', 'Valorant', 'Fitness', 'Movies'],
-    friendsCount: 180,
-    postsCount: 22,
+    friendsCount: 0,
+    postsCount: 1,
     isOnline: true,
     role: 'user',
     settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
-    mutualFriendsCount: 8,
   }
 ];
 
-const INITIAL_ADS: Advertisement[] = [
+const SEED_ADS: Advertisement[] = [
   {
     id: 'ad_1',
     sponsor: 'Cafe Sinouk Laos',
@@ -193,254 +196,180 @@ const INITIAL_ADS: Advertisement[] = [
   }
 ];
 
-const INITIAL_POSTS: Post[] = [
+const SEED_POSTS: Post[] = [
   {
     id: 'post_1',
-    userId: 'user_1',
-    author: INITIAL_USERS[1],
+    userId: 'user_alouny',
+    author: SEED_USERS[1],
     content: 'ມື້ນີ້ມານັ່ງເຮັດວຽກຢູ່ຮ້ານກາເຟແຖວຮິມຂອງ ບັນຍາກາດດີຫຼາຍລົມເຢັນສະບາຍ ໃຜຢູ່ແຖວນີ້ຢາກມານັ່ງລົມກັນທັກມາໄດ້ເດີ້! ☕🌅',
     mediaUrl: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=800&auto=format&fit=crop&q=80',
     mediaType: 'image',
-    likesCount: 24,
-    commentsCount: 5,
-    sharesCount: 2,
-    isLiked: false,
+    likesCount: 1,
+    commentsCount: 2,
+    sharesCount: 0,
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'post_2',
-    userId: 'user_2',
-    author: INITIAL_USERS[2],
+    userId: 'user_khamla',
+    author: SEED_USERS[2],
     content: 'ປັ່ນລົດຖີບຂຶ້ນພູສີຍາມແລງ ຫຼວງພະບາງງາມສະເໝີເລີຍ ມີໃຜມັກປັ່ນລົດຖີບທ່ຽວຄືກັນແດ່? 🚴‍♀️✨',
     mediaUrl: 'https://images.unsplash.com/photo-1528181304800-259b08848526?w=800&auto=format&fit=crop&q=80',
     mediaType: 'image',
-    likesCount: 42,
-    commentsCount: 8,
-    sharesCount: 6,
-    isLiked: true,
+    likesCount: 1,
+    commentsCount: 1,
+    sharesCount: 0,
     createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'post_3',
-    userId: 'user_5',
-    author: INITIAL_USERS[5],
+    userId: 'user_vila',
+    author: SEED_USERS[5],
     content: 'ຫາໝູ່ຕີ Valorant ແລງນີ້ 5 ຄົນ Rank Gold-Plat ໃຜວ່າງແດ່ທັກ Discord ມາໄດ້ເລີຍ! 🎮🔥',
-    likesCount: 15,
-    commentsCount: 11,
-    sharesCount: 1,
-    isLiked: false,
+    likesCount: 0,
+    commentsCount: 0,
+    sharesCount: 0,
     createdAt: new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(),
   }
 ];
 
-const INITIAL_COMMENTS: PostComment[] = [
-  {
-    id: 'comm_1',
-    postId: 'post_1',
-    userId: 'user_3',
-    author: INITIAL_USERS[3],
-    content: 'ຮ້ານໃດນໍ້ນ້ອງອາລຸນີ? ບັນຍາກາດຄືເປັນຕາໄປແທ້ 😍',
-    createdAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'comm_2',
-    postId: 'post_1',
-    userId: 'user_1',
-    author: INITIAL_USERS[1],
-    content: '@soupha_k ຮ້ານແຖວສວນເຈົ້າອະນຸວົງເຈົ້າ ເອື້ອຍມາເລີຍ!',
-    createdAt: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'comm_3',
-    postId: 'post_2',
-    userId: 'user_4',
-    author: INITIAL_USERS[4],
-    content: 'ຫຼວງພະບາງຍາມນີ້ໜ້າໄປທ່ຽວແທ້ໆ 🚴‍♂️',
-    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-  }
-];
-
-const INITIAL_CONVERSATIONS: Conversation[] = [
-  {
-    id: 'conv_1',
-    participants: [INITIAL_USERS[0], INITIAL_USERS[1]],
-    lastMessage: {
-      id: 'msg_3',
-      conversationId: 'conv_1',
-      senderId: 'user_1',
-      sender: INITIAL_USERS[1],
-      content: 'ມື້ອື່ນເຈົ້າວ່າງບໍ່? ໄປຮ້ານກາເຟນຳກັນ!',
-      type: 'text',
-      isRead: false,
-      isDelivered: true,
-      createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    },
-    unreadCount: 1,
-    updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'conv_2',
-    participants: [INITIAL_USERS[0], INITIAL_USERS[2]],
-    lastMessage: {
-      id: 'msg_voice_1',
-      conversationId: 'conv_2',
-      senderId: 'user_2',
-      sender: INITIAL_USERS[2],
-      content: 'ສຽງຂໍ້ຄວາມ (0:08)',
-      type: 'voice',
-      mediaUrl: 'sample_audio',
-      duration: 8,
-      isRead: true,
-      isDelivered: true,
-      createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    },
-    unreadCount: 0,
-    updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-  }
-];
-
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'msg_1',
-    conversationId: 'conv_1',
-    senderId: 'user_me',
-    sender: INITIAL_USERS[0],
-    content: 'ສະບາຍດີອາລຸນີ! ເຫັນໂພສຮູບກາເຟງາມຫຼາຍ ຢູ່ຮ້ານໃດຫວາ?',
-    type: 'text',
-    isRead: true,
-    isDelivered: true,
-    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'msg_2',
-    conversationId: 'conv_1',
-    senderId: 'user_1',
-    sender: INITIAL_USERS[1],
-    content: 'ສະບາຍດີຄຳແພງ! ຢູ່ຮ້ານແຖວຮິມຂອງເດີ້ ກາເຟແຊບຫຼາຍ',
-    type: 'text',
-    isRead: true,
-    isDelivered: true,
-    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'msg_3',
-    conversationId: 'conv_1',
-    senderId: 'user_1',
-    sender: INITIAL_USERS[1],
-    content: 'ມື້ອື່ນເຈົ້າວ່າງບໍ່? ໄປຮ້ານກາເຟນຳກັນ!',
-    type: 'text',
-    isRead: false,
-    isDelivered: true,
-    createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'msg_voice_1',
-    conversationId: 'conv_2',
-    senderId: 'user_2',
-    sender: INITIAL_USERS[2],
-    content: 'ສຽງຂໍ້ຄວາມ (0:08)',
-    type: 'voice',
-    mediaUrl: 'sample_audio',
-    duration: 8,
-    isRead: true,
-    isDelivered: true,
-    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-  }
-];
-
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: 'notif_1',
-    userId: 'user_me',
-    type: 'friend_request',
-    title: 'ຄຳຂໍເປັນເພື່ອນໃໝ່',
-    body: 'Souphaphone Keomany ໄດ້ສົ່ງຄຳຂໍເປັນເພື່ອນຫາເຈົ້າ',
-    sender: INITIAL_USERS[3],
-    isRead: false,
-    createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'notif_2',
-    userId: 'user_me',
-    type: 'post_like',
-    title: 'ຖືກໃຈໂພສ',
-    body: 'Khamla Phommachan ຖືກໃຈໂພສຂອງເຈົ້າ',
-    sender: INITIAL_USERS[2],
-    isRead: true,
-    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-  }
-];
-
-const INITIAL_FRIEND_REQUESTS: FriendRequest[] = [
-  {
-    id: 'freq_1',
-    senderId: 'user_3',
-    receiverId: 'user_me',
-    sender: INITIAL_USERS[3],
-    receiver: INITIAL_USERS[0],
-    status: 'pending',
-    createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-  }
-];
-
-const INITIAL_FRIENDSHIPS = [
-  { user1Id: 'user_me', user2Id: 'user_1', createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() },
-  { user1Id: 'user_me', user2Id: 'user_2', createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString() },
-];
-
-const INITIAL_REPORTS: ReportItem[] = [
-  {
-    id: 'rep_1',
-    targetType: 'post',
-    targetId: 'post_3',
-    reporterId: 'user_1',
-    reporter: INITIAL_USERS[1],
-    reason: 'Spam or irrelevant content',
-    details: 'Looking for gamers on wrong channel',
-    status: 'pending',
-    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-  }
-];
-
-const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
-  {
-    id: 'audit_1',
-    adminId: 'user_me',
-    adminName: 'Khampheng (You)',
-    action: 'SYSTEM_STARTUP',
-    targetType: 'SYSTEM',
-    targetId: 'gukgic_v1',
-    details: 'System initialized and database configured.',
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  }
-];
-
-class MemoryDB {
-  private data: DatabaseSchema;
+class RelationalDatabaseEngine {
+  private data: DatabaseRecord;
 
   constructor() {
     this.data = {
-      users: [...INITIAL_USERS],
-      passwords: {
-        khampheng: 'password123',
-        alouny_s: 'password123',
-        khamla_dev: 'password123',
-        soupha_k: 'password123',
-        sengchanh_camp: 'password123',
-        vila_gamer: 'password123',
-      },
-      friendships: [...INITIAL_FRIENDSHIPS],
-      friendRequests: [...INITIAL_FRIEND_REQUESTS],
-      posts: [...INITIAL_POSTS],
-      comments: [...INITIAL_COMMENTS],
-      conversations: [...INITIAL_CONVERSATIONS],
-      messages: [...INITIAL_MESSAGES],
-      notifications: [...INITIAL_NOTIFICATIONS],
-      reports: [...INITIAL_REPORTS],
+      users: [...SEED_USERS],
+      friendships: [
+        { id: 'f_1', user1Id: 'user_khampheng', user2Id: 'user_alouny', createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() },
+        { id: 'f_2', user1Id: 'user_khampheng', user2Id: 'user_khamla', createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString() },
+      ],
+      friendRequests: [
+        {
+          id: 'freq_1',
+          senderId: 'user_soupha',
+          receiverId: 'user_khampheng',
+          sender: SEED_USERS[3],
+          receiver: SEED_USERS[0],
+          status: 'pending',
+          createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+        }
+      ],
       blocks: [],
-      ads: [...INITIAL_ADS],
-      auditLogs: [...INITIAL_AUDIT_LOGS],
+      posts: [...SEED_POSTS],
+      postLikes: [
+        { id: 'like_1', postId: 'post_1', userId: 'user_khampheng', createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString() },
+        { id: 'like_2', postId: 'post_2', userId: 'user_khampheng', createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString() },
+      ],
+      postComments: [
+        {
+          id: 'comm_1',
+          postId: 'post_1',
+          userId: 'user_soupha',
+          author: SEED_USERS[3],
+          content: 'ຮ້ານໃດນໍ້ນ້ອງອາລຸນີ? ບັນຍາກາດຄືເປັນຕາໄປແທ້ 😍',
+          createdAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'comm_2',
+          postId: 'post_1',
+          userId: 'user_alouny',
+          author: SEED_USERS[1],
+          content: '@soupha_k ຮ້ານແຖວສວນເຈົ້າອະນຸວົງເຈົ້າ ເອື້ອຍມາເລີຍ!',
+          createdAt: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'comm_3',
+          postId: 'post_2',
+          userId: 'user_sengchanh',
+          author: SEED_USERS[4],
+          content: 'ຫຼວງພະບາງຍາມນີ້ໜ້າໄປທ່ຽວແທ້ໆ 🚴‍♂️',
+          createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+        }
+      ],
+      conversations: [
+        { id: 'conv_1', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString() },
+        { id: 'conv_2', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() },
+      ],
+      conversationMembers: [
+        { id: 'cm_1', conversationId: 'conv_1', userId: 'user_khampheng', createdAt: new Date().toISOString() },
+        { id: 'cm_2', conversationId: 'conv_1', userId: 'user_alouny', createdAt: new Date().toISOString() },
+        { id: 'cm_3', conversationId: 'conv_2', userId: 'user_khampheng', createdAt: new Date().toISOString() },
+        { id: 'cm_4', conversationId: 'conv_2', userId: 'user_khamla', createdAt: new Date().toISOString() },
+      ],
+      messages: [
+        {
+          id: 'msg_1',
+          conversationId: 'conv_1',
+          senderId: 'user_khampheng',
+          sender: SEED_USERS[0],
+          content: 'ສະບາຍດີອາລຸນີ! ເຫັນໂພສຮູບກາເຟງາມຫຼາຍ ຢູ່ຮ້ານໃດຫວາ?',
+          type: 'text',
+          isRead: true,
+          isDelivered: true,
+          createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'msg_2',
+          conversationId: 'conv_1',
+          senderId: 'user_alouny',
+          sender: SEED_USERS[1],
+          content: 'ສະບາຍດີຄຳແພງ! ຢູ່ຮ້ານແຖວຮິມຂອງເດີ້ ກາເຟແຊບຫຼາຍ',
+          type: 'text',
+          isRead: true,
+          isDelivered: true,
+          createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'msg_3',
+          conversationId: 'conv_1',
+          senderId: 'user_alouny',
+          sender: SEED_USERS[1],
+          content: 'ມື້ອື່ນເຈົ້າວ່າງບໍ່? ໄປຮ້ານກາເຟນຳກັນ!',
+          type: 'text',
+          isRead: false,
+          isDelivered: true,
+          createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'msg_voice_1',
+          conversationId: 'conv_2',
+          senderId: 'user_khamla',
+          sender: SEED_USERS[2],
+          content: 'ສຽງຂໍ້ຄວາມ (0:08)',
+          type: 'voice',
+          duration: 8,
+          isRead: true,
+          isDelivered: true,
+          createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+        }
+      ],
+      notifications: [
+        {
+          id: 'notif_1',
+          userId: 'user_khampheng',
+          type: 'friend_request',
+          title: 'ຄຳຂໍເປັນເພື່ອນໃໝ່',
+          body: 'Souphaphone Keomany ໄດ້ສົ່ງຄຳຂໍເປັນເພື່ອນຫາເຈົ້າ',
+          sender: SEED_USERS[3],
+          isRead: false,
+          createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+        },
+        {
+          id: 'notif_2',
+          userId: 'user_khampheng',
+          type: 'post_like',
+          title: 'ຖືກໃຈໂພສ',
+          body: 'Khamla Phommachan ຖືກໃຈໂພສຂອງເຈົ້າ',
+          sender: SEED_USERS[2],
+          isRead: true,
+          createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+        }
+      ],
+      advertisements: [...SEED_ADS],
+      reports: [],
+      auditLogs: [],
     };
+
     this.loadFromDisk();
   }
 
@@ -454,7 +383,7 @@ class MemoryDB {
         }
       }
     } catch {
-      // Ignore fallback errors and use in-memory
+      //
     }
   }
 
@@ -466,39 +395,65 @@ class MemoryDB {
       }
       fs.writeFileSync(DB_FILE_PATH, JSON.stringify(this.data, null, 2), 'utf-8');
     } catch {
-      // Ignore disk write errors in ephemeral environments
+      //
     }
   }
 
-  // --- Users ---
+  // --- Users & Auth ---
   getUsers(): User[] {
-    return this.data.users;
+    return this.data.users.map(({ passwordHash, ...user }) => user);
   }
 
   getUserById(id: string): User | undefined {
-    return this.data.users.find((u) => u.id === id);
+    const userWithHash = this.data.users.find((u) => u.id === id);
+    if (!userWithHash) return undefined;
+    const { passwordHash, ...user } = userWithHash;
+    return user;
+  }
+
+  getUserWithPassword(username: string): (User & { passwordHash: string }) | undefined {
+    return this.data.users.find((u) => u.username.toLowerCase() === username.toLowerCase().trim());
   }
 
   getUserByUsername(username: string): User | undefined {
-    return this.data.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    const userWithHash = this.data.users.find(
+      (u) => u.username.toLowerCase() === username.toLowerCase().trim()
+    );
+    if (!userWithHash) return undefined;
+    const { passwordHash, ...user } = userWithHash;
+    return user;
   }
 
   createUser(user: User, passwordHash: string): User {
-    this.data.users.push(user);
-    this.data.passwords[user.username] = passwordHash;
+    const existing = this.data.users.find(
+      (u) => u.username.toLowerCase() === user.username.toLowerCase().trim()
+    );
+    if (existing) throw new Error('Username already exists');
+
+    const newUserWithHash = { ...user, passwordHash };
+    this.data.users.push(newUserWithHash);
     this.saveToDisk();
-    return user;
+
+    const { passwordHash: _, ...createdUser } = newUserWithHash;
+    return createdUser;
   }
 
   updateUser(id: string, updates: Partial<User>): User | null {
     const idx = this.data.users.findIndex((u) => u.id === id);
     if (idx === -1) return null;
-    this.data.users[idx] = { ...this.data.users[idx], ...updates };
+
+    this.data.users[idx] = {
+      ...this.data.users[idx],
+      ...updates,
+      updatedAt: new Date().toISOString() as any,
+    };
     this.saveToDisk();
-    return this.data.users[idx];
+
+    const { passwordHash, ...user } = this.data.users[idx];
+    return user;
   }
 
-  // --- Friendship System ---
+  // --- Friend System ---
   getFriendshipStatus(currentUserId: string, targetUserId: string): FriendshipStatus {
     if (currentUserId === targetUserId) return 'none';
 
@@ -510,7 +465,7 @@ class MemoryDB {
     );
     if (isBlocked) return 'blocked';
 
-    // Check friends
+    // Check friendship
     const areFriends = this.data.friendships.some(
       (f) =>
         (f.user1Id === currentUserId && f.user2Id === targetUserId) ||
@@ -538,30 +493,42 @@ class MemoryDB {
       .filter((f) => f.user1Id === userId || f.user2Id === userId)
       .map((f) => (f.user1Id === userId ? f.user2Id : f.user1Id));
 
-    return this.data.users.filter((u) => friendIds.includes(u.id));
+    return this.data.users
+      .filter((u) => friendIds.includes(u.id) && !u.isBanned)
+      .map(({ passwordHash, ...user }) => user);
   }
 
   getPendingRequests(userId: string): FriendRequest[] {
-    return this.data.friendRequests.filter(
-      (r) => r.receiverId === userId && r.status === 'pending'
-    );
+    return this.data.friendRequests
+      .filter((r) => r.receiverId === userId && r.status === 'pending')
+      .map((r) => ({
+        ...r,
+        sender: this.getUserById(r.senderId) || r.sender,
+        receiver: this.getUserById(r.receiverId) || r.receiver,
+      }));
   }
 
   getSentRequests(userId: string): FriendRequest[] {
-    return this.data.friendRequests.filter(
-      (r) => r.senderId === userId && r.status === 'pending'
-    );
+    return this.data.friendRequests
+      .filter((r) => r.senderId === userId && r.status === 'pending')
+      .map((r) => ({
+        ...r,
+        sender: this.getUserById(r.senderId) || r.sender,
+        receiver: this.getUserById(r.receiverId) || r.receiver,
+      }));
   }
 
-  sendFriendRequest(senderId: string, receiverId: string): FriendRequest | null {
+  sendFriendRequest(senderId: string, receiverId: string): FriendRequest {
+    if (senderId === receiverId) throw new Error('Cannot send friend request to yourself');
+
+    const status = this.getFriendshipStatus(senderId, receiverId);
+    if (status === 'blocked') throw new Error('Cannot send friend request to blocked user');
+    if (status === 'friends') throw new Error('Already friends');
+    if (status === 'pending') throw new Error('Friend request already sent');
+
     const sender = this.getUserById(senderId);
     const receiver = this.getUserById(receiverId);
-    if (!sender || !receiver) return null;
-
-    const existing = this.data.friendRequests.find(
-      (r) => r.senderId === senderId && r.receiverId === receiverId && r.status === 'pending'
-    );
-    if (existing) return existing;
+    if (!sender || !receiver) throw new Error('User not found');
 
     const request: FriendRequest = {
       id: `req_${Date.now()}`,
@@ -587,40 +554,52 @@ class MemoryDB {
     return request;
   }
 
-  acceptFriendRequest(requestId: string, userId: string): boolean {
+  acceptFriendRequest(requestId: string, currentUserId: string): boolean {
     const request = this.data.friendRequests.find((r) => r.id === requestId);
-    if (!request || request.receiverId !== userId) return false;
+    if (!request || request.receiverId !== currentUserId || request.status !== 'pending') {
+      return false;
+    }
 
     request.status = 'accepted';
 
-    this.data.friendships.push({
-      user1Id: request.senderId,
-      user2Id: request.receiverId,
-      createdAt: new Date().toISOString(),
-    });
+    // Add unique friendship
+    const alreadyFriends = this.data.friendships.some(
+      (f) =>
+        (f.user1Id === request.senderId && f.user2Id === request.receiverId) ||
+        (f.user1Id === request.receiverId && f.user2Id === request.senderId)
+    );
 
-    const u1 = this.getUserById(request.senderId);
-    const u2 = this.getUserById(request.receiverId);
-    if (u1) u1.friendsCount += 1;
-    if (u2) u2.friendsCount += 1;
-
-    if (u2) {
-      this.createNotification({
-        userId: request.senderId,
-        type: 'friend_accept',
-        title: 'ຍອມຮັບຄຳຂໍເປັນເພື່ອນ',
-        body: `${u2.name} ໄດ້ຕອບຮັບຄຳຂໍເປັນເພື່ອນຂອງເຈົ້າແລ້ວ!`,
-        sender: u2,
+    if (!alreadyFriends) {
+      this.data.friendships.push({
+        id: `f_${Date.now()}`,
+        user1Id: request.senderId,
+        user2Id: request.receiverId,
+        createdAt: new Date().toISOString(),
       });
+
+      const u1 = this.getUserById(request.senderId);
+      const u2 = this.getUserById(request.receiverId);
+      if (u1) this.updateUser(u1.id, { friendsCount: u1.friendsCount + 1 });
+      if (u2) this.updateUser(u2.id, { friendsCount: u2.friendsCount + 1 });
+
+      if (u2) {
+        this.createNotification({
+          userId: request.senderId,
+          type: 'friend_accept',
+          title: 'ຍອມຮັບຄຳຂໍເປັນເພື່ອນ',
+          body: `${u2.name} ໄດ້ຕອບຮັບຄຳຂໍເປັນເພື່ອນຂອງເຈົ້າແລ້ວ!`,
+          sender: u2,
+        });
+      }
     }
 
     this.saveToDisk();
     return true;
   }
 
-  rejectFriendRequest(requestId: string, userId: string): boolean {
+  rejectFriendRequest(requestId: string, currentUserId: string): boolean {
     const request = this.data.friendRequests.find((r) => r.id === requestId);
-    if (!request || request.receiverId !== userId) return false;
+    if (!request || request.receiverId !== currentUserId) return false;
     request.status = 'rejected';
     this.saveToDisk();
     return true;
@@ -648,34 +627,69 @@ class MemoryDB {
       this.data.friendships.splice(idx, 1);
       const u1 = this.getUserById(userId1);
       const u2 = this.getUserById(userId2);
-      if (u1 && u1.friendsCount > 0) u1.friendsCount -= 1;
-      if (u2 && u2.friendsCount > 0) u2.friendsCount -= 1;
+      if (u1 && u1.friendsCount > 0) this.updateUser(u1.id, { friendsCount: u1.friendsCount - 1 });
+      if (u2 && u2.friendsCount > 0) this.updateUser(u2.id, { friendsCount: u2.friendsCount - 1 });
       this.saveToDisk();
       return true;
     }
     return false;
   }
 
+  // --- Block System ---
+  blockUser(blockerId: string, blockedId: string): void {
+    if (blockerId === blockedId) return;
+
+    if (!this.data.blocks.some((b) => b.blockerId === blockerId && b.blockedId === blockedId)) {
+      this.data.blocks.push({
+        id: `blk_${Date.now()}`,
+        blockerId,
+        blockedId,
+        createdAt: new Date().toISOString(),
+      });
+      // Remove any friendship or pending requests
+      this.removeFriend(blockerId, blockedId);
+      this.data.friendRequests = this.data.friendRequests.filter(
+        (r) =>
+          !(r.senderId === blockerId && r.receiverId === blockedId) &&
+          !(r.senderId === blockedId && r.receiverId === blockerId)
+      );
+      this.saveToDisk();
+    }
+  }
+
+  unblockUser(blockerId: string, blockedId: string): void {
+    this.data.blocks = this.data.blocks.filter(
+      (b) => !(b.blockerId === blockerId && b.blockedId === blockedId)
+    );
+    this.saveToDisk();
+  }
+
   getBlockedUsers(userId: string): User[] {
     const blockedIds = this.data.blocks
       .filter((b) => b.blockerId === userId)
       .map((b) => b.blockedId);
-    return this.data.users.filter((u) => blockedIds.includes(u.id));
+    return this.data.users
+      .filter((u) => blockedIds.includes(u.id))
+      .map(({ passwordHash, ...user }) => user);
   }
 
-  // --- Friend Discovery ---
+  // --- Discovery ---
   discoverFriends(currentUserId: string, options?: { city?: string; interest?: string; search?: string }): User[] {
     const friends = this.getFriends(currentUserId).map((f) => f.id);
     const blockedIds = this.data.blocks
       .filter((b) => b.blockerId === currentUserId || b.blockedId === currentUserId)
       .map((b) => (b.blockerId === currentUserId ? b.blockedId : b.blockerId));
 
-    let list = this.data.users.filter(
-      (u) => u.id !== currentUserId && !friends.includes(u.id) && !blockedIds.includes(u.id)
-    );
+    let list = this.data.users
+      .filter((u) => u.id !== currentUserId && !friends.includes(u.id) && !blockedIds.includes(u.id) && !u.isBanned)
+      .map(({ passwordHash, ...user }) => user);
 
     if (options?.city && options.city !== 'All') {
-      list = list.filter((u) => u.city?.toLowerCase() === options.city?.toLowerCase() || u.location?.toLowerCase().includes(options.city?.toLowerCase() || ''));
+      list = list.filter(
+        (u) =>
+          u.city?.toLowerCase() === options.city?.toLowerCase() ||
+          u.location?.toLowerCase().includes(options.city?.toLowerCase() || '')
+      );
     }
 
     if (options?.interest && options.interest !== 'All') {
@@ -683,7 +697,7 @@ class MemoryDB {
     }
 
     if (options?.search) {
-      const q = options.search.toLowerCase();
+      const q = options.search.toLowerCase().trim();
       list = list.filter(
         (u) =>
           u.name.toLowerCase().includes(q) ||
@@ -696,24 +710,39 @@ class MemoryDB {
     return list;
   }
 
-  // --- Posts ---
-  getPosts(currentUserId?: string): Post[] {
+  // --- Posts & Feed ---
+  getPosts(currentUserId?: string, limit = 20, offset = 0): Post[] {
+    const blockedIds = currentUserId
+      ? this.data.blocks
+          .filter((b) => b.blockerId === currentUserId || b.blockedId === currentUserId)
+          .map((b) => (b.blockerId === currentUserId ? b.blockedId : b.blockerId))
+      : [];
+
     return this.data.posts
-      .filter((p) => !p.isHidden)
+      .filter((p) => !p.isHidden && !blockedIds.includes(p.userId))
       .map((p) => {
         const author = this.getUserById(p.userId) || p.author;
+        const isLiked = currentUserId
+          ? this.data.postLikes.some((l) => l.postId === p.id && l.userId === currentUserId)
+          : false;
+        const likesCount = this.data.postLikes.filter((l) => l.postId === p.id).length;
+        const commentsCount = this.data.postComments.filter((c) => c.postId === p.id && !c.isHidden).length;
+
         return {
           ...p,
           author,
-          isLiked: p.isLiked || false,
+          isLiked,
+          likesCount,
+          commentsCount,
         };
       })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(offset, offset + limit);
   }
 
-  createPost(userId: string, content: string, mediaUrl?: string): Post | null {
+  createPost(userId: string, content: string, mediaUrl?: string): Post {
     const author = this.getUserById(userId);
-    if (!author) return null;
+    if (!author) throw new Error('Author not found');
 
     const post: Post = {
       id: `post_${Date.now()}`,
@@ -730,38 +759,68 @@ class MemoryDB {
     };
 
     this.data.posts.unshift(post);
-    author.postsCount += 1;
+    this.updateUser(userId, { postsCount: author.postsCount + 1 });
     this.saveToDisk();
     return post;
   }
 
-  toggleLikePost(postId: string, userId: string): { isLiked: boolean; likesCount: number } | null {
+  deletePost(postId: string, userId: string): boolean {
+    const idx = this.data.posts.findIndex((p) => p.id === postId && p.userId === userId);
+    if (idx !== -1) {
+      this.data.posts.splice(idx, 1);
+      // Cascade delete likes and comments
+      this.data.postLikes = this.data.postLikes.filter((l) => l.postId !== postId);
+      this.data.postComments = this.data.postComments.filter((c) => c.postId !== postId);
+      const user = this.getUserById(userId);
+      if (user && user.postsCount > 0) this.updateUser(userId, { postsCount: user.postsCount - 1 });
+      this.saveToDisk();
+      return true;
+    }
+    return false;
+  }
+
+  toggleLikePost(postId: string, userId: string): { isLiked: boolean; likesCount: number } {
     const post = this.data.posts.find((p) => p.id === postId);
-    if (!post) return null;
+    if (!post) throw new Error('Post not found');
 
-    post.isLiked = !post.isLiked;
-    post.likesCount = post.isLiked ? post.likesCount + 1 : Math.max(0, post.likesCount - 1);
+    const existingIndex = this.data.postLikes.findIndex((l) => l.postId === postId && l.userId === userId);
 
-    if (post.isLiked && post.userId !== userId) {
-      const sender = this.getUserById(userId);
-      if (sender) {
-        this.createNotification({
-          userId: post.userId,
-          type: 'post_like',
-          title: 'ຖືກໃຈໂພສ',
-          body: `${sender.name} ຖືກໃຈໂພສຂອງເຈົ້າ`,
-          sender,
-          targetId: postId,
-        });
+    let isLiked = false;
+    if (existingIndex !== -1) {
+      this.data.postLikes.splice(existingIndex, 1);
+      isLiked = false;
+    } else {
+      this.data.postLikes.push({
+        id: `like_${Date.now()}`,
+        postId,
+        userId,
+        createdAt: new Date().toISOString(),
+      });
+      isLiked = true;
+
+      if (post.userId !== userId) {
+        const sender = this.getUserById(userId);
+        if (sender) {
+          this.createNotification({
+            userId: post.userId,
+            type: 'post_like',
+            title: 'ຖືກໃຈໂພສ',
+            body: `${sender.name} ຖືກໃຈໂພສຂອງເຈົ້າ`,
+            sender,
+            targetId: postId,
+          });
+        }
       }
     }
 
+    const likesCount = this.data.postLikes.filter((l) => l.postId === postId).length;
+    post.likesCount = likesCount;
     this.saveToDisk();
-    return { isLiked: post.isLiked, likesCount: post.likesCount };
+    return { isLiked, likesCount };
   }
 
   getComments(postId: string): PostComment[] {
-    return this.data.comments
+    return this.data.postComments
       .filter((c) => c.postId === postId && !c.isHidden)
       .map((c) => ({
         ...c,
@@ -770,10 +829,10 @@ class MemoryDB {
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
-  addComment(postId: string, userId: string, content: string): PostComment | null {
+  addComment(postId: string, userId: string, content: string): PostComment {
     const author = this.getUserById(userId);
     const post = this.data.posts.find((p) => p.id === postId);
-    if (!author || !post) return null;
+    if (!author || !post) throw new Error('Post or Author not found');
 
     const comment: PostComment = {
       id: `comm_${Date.now()}`,
@@ -784,15 +843,15 @@ class MemoryDB {
       createdAt: new Date().toISOString(),
     };
 
-    this.data.comments.push(comment);
-    post.commentsCount += 1;
+    this.data.postComments.push(comment);
+    post.commentsCount = this.data.postComments.filter((c) => c.postId === postId && !c.isHidden).length;
 
     if (post.userId !== userId) {
       this.createNotification({
         userId: post.userId,
         type: 'post_comment',
         title: 'ຄວາມຄິດເຫັນໃໝ່',
-        body: `${author.name} ໄດ້ສະແດງຄວາມຄິດເຫັນເທິງໂພສຂອງເຈົ້າ: "${content.slice(0, 30)}..."`,
+        body: `${author.name} ໄດ້ສະແດງຄວາມຄິດເຫັນ: "${content.slice(0, 30)}..."`,
         sender: author,
         targetId: postId,
       });
@@ -802,48 +861,108 @@ class MemoryDB {
     return comment;
   }
 
+  deleteComment(commentId: string, userId: string): boolean {
+    const idx = this.data.postComments.findIndex((c) => c.id === commentId && c.userId === userId);
+    if (idx !== -1) {
+      const postId = this.data.postComments[idx].postId;
+      this.data.postComments.splice(idx, 1);
+      const post = this.data.posts.find((p) => p.id === postId);
+      if (post) {
+        post.commentsCount = this.data.postComments.filter((c) => c.postId === postId && !c.isHidden).length;
+      }
+      this.saveToDisk();
+      return true;
+    }
+    return false;
+  }
+
   // --- Conversations & Messages ---
   getConversations(userId: string): Conversation[] {
+    const userConvs = this.data.conversationMembers
+      .filter((cm) => cm.userId === userId)
+      .map((cm) => cm.conversationId);
+
     return this.data.conversations
-      .filter((c) => c.participants.some((p) => p.id === userId))
-      .map((c) => ({
-        ...c,
-        participants: c.participants.map((p) => this.getUserById(p.id) || p),
-      }))
+      .filter((c) => userConvs.includes(c.id))
+      .map((c) => {
+        const memberIds = this.data.conversationMembers
+          .filter((cm) => cm.conversationId === c.id)
+          .map((cm) => cm.userId);
+        const participants = this.data.users
+          .filter((u) => memberIds.includes(u.id))
+          .map(({ passwordHash, ...user }) => user);
+
+        const convMessages = this.data.messages.filter((m) => m.conversationId === c.id);
+        const lastMessage = convMessages[convMessages.length - 1];
+        const unreadCount = convMessages.filter((m) => m.senderId !== userId && !m.isRead).length;
+
+        return {
+          id: c.id,
+          participants,
+          lastMessage,
+          unreadCount,
+          updatedAt: c.updatedAt,
+        };
+      })
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
   getOrCreateConversation(user1Id: string, user2Id: string): Conversation {
-    const existing = this.data.conversations.find(
-      (c) =>
-        c.participants.some((p) => p.id === user1Id) &&
-        c.participants.some((p) => p.id === user2Id)
-    );
-
-    if (existing) {
-      return {
-        ...existing,
-        participants: existing.participants.map((p) => this.getUserById(p.id) || p),
-      };
-    }
-
     const u1 = this.getUserById(user1Id);
     const u2 = this.getUserById(user2Id);
     if (!u1 || !u2) throw new Error('Users not found');
 
-    const newConv: Conversation = {
-      id: `conv_${Date.now()}`,
+    // Find conversation where both are members
+    const c1 = this.data.conversationMembers.filter((cm) => cm.userId === user1Id).map((cm) => cm.conversationId);
+    const c2 = this.data.conversationMembers.filter((cm) => cm.userId === user2Id).map((cm) => cm.conversationId);
+    const commonId = c1.find((id) => c2.includes(id));
+
+    if (commonId) {
+      const conv = this.data.conversations.find((c) => c.id === commonId);
+      if (conv) {
+        const memberIds = this.data.conversationMembers.filter((cm) => cm.conversationId === conv.id).map((cm) => cm.userId);
+        const participants = this.data.users.filter((u) => memberIds.includes(u.id)).map(({ passwordHash, ...user }) => user);
+        return {
+          id: conv.id,
+          participants,
+          unreadCount: 0,
+          updatedAt: conv.updatedAt,
+        };
+      }
+    }
+
+    const newId = `conv_${Date.now()}`;
+    const now = new Date().toISOString();
+    this.data.conversations.unshift({ id: newId, createdAt: now, updatedAt: now });
+    this.data.conversationMembers.push(
+      { id: `cm_${Date.now()}_1`, conversationId: newId, userId: user1Id, createdAt: now },
+      { id: `cm_${Date.now()}_2`, conversationId: newId, userId: user2Id, createdAt: now }
+    );
+    this.saveToDisk();
+
+    return {
+      id: newId,
       participants: [u1, u2],
       unreadCount: 0,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     };
-
-    this.data.conversations.unshift(newConv);
-    this.saveToDisk();
-    return newConv;
   }
 
-  getMessages(conversationId: string): Message[] {
+  getMessages(conversationId: string, userId: string): Message[] {
+    // Authorize member
+    const isMember = this.data.conversationMembers.some(
+      (cm) => cm.conversationId === conversationId && cm.userId === userId
+    );
+    if (!isMember) throw new Error('Unauthorized to view conversation');
+
+    // Mark incoming messages as read
+    this.data.messages
+      .filter((m) => m.conversationId === conversationId && m.senderId !== userId && !m.isRead)
+      .forEach((m) => {
+        m.isRead = true;
+      });
+    this.saveToDisk();
+
     return this.data.messages
       .filter((m) => m.conversationId === conversationId)
       .map((m) => ({
@@ -861,10 +980,14 @@ class MemoryDB {
     mediaUrl?: string;
     duration?: number;
     replyTo?: { id: string; senderName: string; content: string };
-  }): Message | null {
+  }): Message {
+    const isMember = this.data.conversationMembers.some(
+      (cm) => cm.conversationId === params.conversationId && cm.userId === params.senderId
+    );
+    if (!isMember) throw new Error('Unauthorized');
+
     const sender = this.getUserById(params.senderId);
-    const conv = this.data.conversations.find((c) => c.id === params.conversationId);
-    if (!sender || !conv) return null;
+    if (!sender) throw new Error('Sender not found');
 
     const message: Message = {
       id: `msg_${Date.now()}`,
@@ -882,21 +1005,12 @@ class MemoryDB {
     };
 
     this.data.messages.push(message);
-    conv.lastMessage = message;
-    conv.updatedAt = message.createdAt;
+
+    const conv = this.data.conversations.find((c) => c.id === params.conversationId);
+    if (conv) conv.updatedAt = message.createdAt;
 
     this.saveToDisk();
     return message;
-  }
-
-  deleteMessage(messageId: string, userId: string): boolean {
-    const idx = this.data.messages.findIndex((m) => m.id === messageId && m.senderId === userId);
-    if (idx !== -1) {
-      this.data.messages.splice(idx, 1);
-      this.saveToDisk();
-      return true;
-    }
-    return false;
   }
 
   // --- Notifications ---
@@ -946,11 +1060,11 @@ class MemoryDB {
 
   // --- Ads ---
   getAds(): Advertisement[] {
-    return this.data.ads.filter((a) => a.isActive);
+    return this.data.advertisements.filter((a) => a.isActive);
   }
 
   getAllAds(): Advertisement[] {
-    return this.data.ads;
+    return this.data.advertisements;
   }
 
   createAd(ad: Omit<Advertisement, 'id' | 'createdAt' | 'impressions' | 'clicks'>): Advertisement {
@@ -961,30 +1075,30 @@ class MemoryDB {
       clicks: 0,
       createdAt: new Date().toISOString(),
     };
-    this.data.ads.unshift(newAd);
+    this.data.advertisements.unshift(newAd);
     this.saveToDisk();
     return newAd;
   }
 
   updateAd(id: string, updates: Partial<Advertisement>): Advertisement | null {
-    const idx = this.data.ads.findIndex((a) => a.id === id);
+    const idx = this.data.advertisements.findIndex((a) => a.id === id);
     if (idx === -1) return null;
-    this.data.ads[idx] = { ...this.data.ads[idx], ...updates };
+    this.data.advertisements[idx] = { ...this.data.advertisements[idx], ...updates };
     this.saveToDisk();
-    return this.data.ads[idx];
+    return this.data.advertisements[idx];
   }
 
   deleteAd(id: string): boolean {
-    const idx = this.data.ads.findIndex((a) => a.id === id);
+    const idx = this.data.advertisements.findIndex((a) => a.id === id);
     if (idx !== -1) {
-      this.data.ads.splice(idx, 1);
+      this.data.advertisements.splice(idx, 1);
       this.saveToDisk();
       return true;
     }
     return false;
   }
 
-  // --- Moderation & Reports ---
+  // --- Reports & Moderation ---
   getReports(): ReportItem[] {
     return this.data.reports.map((r) => ({
       ...r,
@@ -1014,23 +1128,18 @@ class MemoryDB {
     report.resolvedBy = adminUser.name;
     report.resolvedAt = new Date().toISOString();
 
-    // Execute action
     if (action === 'hidden' || action === 'removed') {
       if (report.targetType === 'post') {
         const p = this.data.posts.find((post) => post.id === report.targetId);
         if (p) p.isHidden = true;
-      } else if (report.targetType === 'comment') {
-        const c = this.data.comments.find((comm) => comm.id === report.targetId);
-        if (c) c.isHidden = true;
       }
     } else if (action === 'banned') {
       if (report.targetType === 'user') {
         const u = this.getUserById(report.targetId);
-        if (u) u.isBanned = true;
+        if (u) this.updateUser(u.id, { isBanned: true });
       }
     }
 
-    // Add audit log
     this.addAuditLog({
       adminId: adminUser.id,
       adminName: adminUser.name,
@@ -1065,26 +1174,6 @@ class MemoryDB {
     return true;
   }
 
-  blockUser(blockerId: string, blockedId: string): void {
-    if (!this.data.blocks.some((b) => b.blockerId === blockerId && b.blockedId === blockedId)) {
-      this.data.blocks.push({
-        blockerId,
-        blockedId,
-        createdAt: new Date().toISOString(),
-      });
-      this.removeFriend(blockerId, blockedId);
-      this.saveToDisk();
-    }
-  }
-
-  unblockUser(blockerId: string, blockedId: string): void {
-    const idx = this.data.blocks.findIndex((b) => b.blockerId === blockerId && b.blockedId === blockedId);
-    if (idx !== -1) {
-      this.data.blocks.splice(idx, 1);
-      this.saveToDisk();
-    }
-  }
-
   // --- Audit Logs ---
   getAuditLogs(): AuditLogItem[] {
     return this.data.auditLogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -1101,20 +1190,19 @@ class MemoryDB {
     return newLog;
   }
 
-  // --- Admin Overview Stats ---
   getAdminStats() {
     return {
       totalUsers: this.data.users.length,
       activeUsers: this.data.users.filter((u) => u.isOnline).length,
       totalPosts: this.data.posts.length,
       pendingReports: this.data.reports.filter((r) => r.status === 'pending').length,
-      totalAds: this.data.ads.length,
-      activeAds: this.data.ads.filter((a) => a.isActive).length,
+      totalAds: this.data.advertisements.length,
+      activeAds: this.data.advertisements.filter((a) => a.isActive).length,
       totalConversations: this.data.conversations.length,
     };
   }
 }
 
-const globalForDb = global as unknown as { dbInstance?: MemoryDB };
-export const db = globalForDb.dbInstance ?? new MemoryDB();
-if (process.env.NODE_ENV !== 'production') globalForDb.dbInstance = db;
+const globalForDb = global as unknown as { dbEngineInstance?: RelationalDatabaseEngine };
+export const db = globalForDb.dbEngineInstance ?? new RelationalDatabaseEngine();
+if (process.env.NODE_ENV !== 'production') globalForDb.dbEngineInstance = db;

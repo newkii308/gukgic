@@ -1,50 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { signToken, comparePassword } from '@/lib/auth';
+import { signToken, comparePassword, TOKEN_COOKIE_NAME } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { username, password, userId } = body;
+    const { username, password } = body;
 
-    // Fast switch demo user
-    if (userId) {
-      const user = db.getUserById(userId);
-      if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-      }
-      const token = signToken(user);
-      const res = NextResponse.json({ user, token });
-      res.cookies.set('friend_token', token, {
-        httpOnly: true,
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-        sameSite: 'lax',
-      });
-      return res;
+    if (!username || !password) {
+      return NextResponse.json(
+        { error: 'ກະລຸນາປ້ອນ Username ແລະ ລະຫັດຜ່ານ (Username and password are required)' },
+        { status: 400 }
+      );
     }
 
-    if (!username) {
-      return NextResponse.json({ error: 'Username is required' }, { status: 400 });
+    const userWithHash = db.getUserWithPassword(username.trim());
+    if (!userWithHash) {
+      return NextResponse.json(
+        { error: 'Username ຫຼື ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ (Invalid username or password)' },
+        { status: 401 }
+      );
     }
 
-    const user = db.getUserByUsername(username);
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    if (userWithHash.isBanned) {
+      return NextResponse.json(
+        { error: 'ບັນຊີຂອງທ່ານຖືກລະງັບການໃຊ້ງານ (Your account has been suspended)' },
+        { status: 403 }
+      );
     }
 
-    const isValid = await comparePassword(password || 'password123', 'password123');
+    // Verify password with bcrypt
+    const isValid = await comparePassword(password, userWithHash.passwordHash);
     if (!isValid) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Username ຫຼື ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ (Invalid username or password)' },
+        { status: 401 }
+      );
     }
 
+    const { passwordHash, ...user } = userWithHash;
     const token = signToken(user);
+
     const res = NextResponse.json({ user, token });
-    res.cookies.set('friend_token', token, {
+    res.cookies.set(TOKEN_COOKIE_NAME, token, {
       httpOnly: true,
       path: '/',
       maxAge: 7 * 24 * 60 * 60,
       sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
     });
 
     return res;

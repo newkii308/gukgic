@@ -1,65 +1,82 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { User } from '@/types';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (username: string, password?: string) => Promise<boolean>;
-  logout: () => void;
-  switchDemoUser: (userId: string) => Promise<void>;
-  updateProfile: (data: Partial<User>) => Promise<boolean>;
-  refreshUser: () => Promise<void>;
+  login: (username: string, password?: string) => Promise<void>;
+  register: (data: { username: string; name: string; password?: string; city?: string; interests?: string[] }) => Promise<void>;
+  logout: () => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  login: async () => false,
-  logout: () => {},
-  switchDemoUser: async () => {},
-  updateProfile: async () => false,
-  refreshUser: async () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const router = useRouter();
 
-  const refreshUser = useCallback(async () => {
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
+  const fetchCurrentUser = async () => {
     try {
       const res = await fetch('/api/auth/me');
       if (res.ok) {
         const data = await res.json();
-        setUser(data.user);
+        setUser(data.user || null);
+      } else {
+        setUser(null);
       }
     } catch {
-      // Fallback
+      setUser(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    refreshUser();
-  }, [refreshUser]);
-
-  const login = async (username: string, password?: string): Promise<boolean> => {
+  const login = async (username: string, password = 'password123') => {
+    setLoading(true);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password: password || 'password123' }),
+        body: JSON.stringify({ username, password }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        return true;
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
       }
-      return false;
-    } catch {
-      return false;
+
+      setUser(data.user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async (data: { username: string; name: string; password?: string; city?: string; interests?: string[] }) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Registration failed');
+      }
+
+      setUser(json.user);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -68,42 +85,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch {
       //
-    }
-    setUser(null);
-  };
-
-  const switchDemoUser = async (userId: string) => {
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        window.location.reload();
-      }
-    } catch {
-      //
+    } finally {
+      setUser(null);
+      router.push('/login');
+      router.refresh();
     }
   };
 
-  const updateProfile = async (data: Partial<User>): Promise<boolean> => {
+  const updateProfile = async (data: Partial<User>) => {
     try {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
+
       if (res.ok) {
-        const updated = await res.json();
-        setUser(updated.user);
-        return true;
+        const json = await res.json();
+        setUser(json.user);
       }
-      return false;
     } catch {
-      return false;
+      //
     }
   };
 
@@ -113,10 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         login,
+        register,
         logout,
-        switchDemoUser,
         updateProfile,
-        refreshUser,
       }}
     >
       {children}
@@ -124,4 +125,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
