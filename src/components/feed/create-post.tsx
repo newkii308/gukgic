@@ -22,8 +22,8 @@ export const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
   const handlePickImage = async () => {
     const res = await NativeCamera.pickImage();
-    if (res?.dataUrl) {
-      setMediaUrl(res.dataUrl);
+    if (res?.uploadedUrl || res?.dataUrl) {
+      setMediaUrl(res.uploadedUrl || res.dataUrl || null);
     }
   };
 

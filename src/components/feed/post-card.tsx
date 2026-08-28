@@ -124,16 +124,41 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onDelete }) => {
 
           {menuOpen && (
             <div className="absolute right-0 mt-1 w-44 bg-white dark:bg-dark-card rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-1.5 z-30 animate-scale-up">
-              <button
-                onClick={handleCopyLink}
-                className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-elevated transition-colors"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? t('app.success') : 'Copy link'}</span>
-              </button>
+              {copied ? (
+                <div className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2 text-emerald-600">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{t('app.success')}</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleCopyLink}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-elevated transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy link</span>
+                </button>
+              )}
+
+              {user && (user.id === post.userId || user.role === 'admin') && (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to delete this post?')) return;
+                    try {
+                      await fetch(`/api/posts/${post.id}`, { method: 'DELETE' });
+                      if (onDelete) onDelete(post.id);
+                    } catch {}
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors font-semibold"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                  <span>Delete Post</span>
+                </button>
+              )}
+
               <button
                 onClick={handleReport}
-                className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                className="w-full text-left px-3 py-2 rounded-xl text-xs flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-elevated transition-colors"
               >
                 <Flag className="w-3.5 h-3.5" />
                 <span>{reported ? t('moderation.reportSubmitted') : t('moderation.reportPost')}</span>
