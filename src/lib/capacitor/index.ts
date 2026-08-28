@@ -8,6 +8,7 @@ export interface CameraResult {
   dataUrl?: string;
   blob?: Blob;
   file?: File;
+  uploadedUrl?: string;
 }
 
 export const NativeCamera = {
@@ -16,23 +17,62 @@ export const NativeCamera = {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
-      input.onchange = (e) => {
+      input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) {
           resolve(null);
           return;
         }
+
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
+          const dataUrl = reader.result as string;
+
+          // Upload real file to server
+          let uploadedUrl: string | undefined;
+          try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const uploadRes = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData,
+            });
+            if (uploadRes.ok) {
+              const uploadJson = await uploadRes.json();
+              uploadedUrl = uploadJson.url;
+            }
+          } catch {
+            // fallback to dataUrl
+          }
+
           resolve({
-            dataUrl: reader.result as string,
+            dataUrl,
             file,
+            uploadedUrl: uploadedUrl || dataUrl,
           });
         };
         reader.readAsDataURL(file);
       };
       input.click();
     });
+  },
+
+  async uploadFile(file: File | Blob, filename = 'recording.webm'): Promise<string | null> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file, filename);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        return json.url;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 };
 
@@ -41,7 +81,6 @@ export const NativeMicrophone = {
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Stop tracks immediately after permission check
         stream.getTracks().forEach((track) => track.stop());
         return true;
       }
