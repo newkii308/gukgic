@@ -7,8 +7,16 @@ import { User } from '@/types';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (username: string, password?: string) => Promise<void>;
-  register: (data: { username: string; name: string; password?: string; city?: string; interests?: string[] }) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (data: {
+    username: string;
+    name: string;
+    password: string;
+    city?: string;
+    interests?: string[];
+    languages?: string[];
+    bio?: string;
+  }) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<void>;
 }
@@ -40,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (username: string, password = 'password123') => {
+  const login = async (username: string, password: string) => {
     setLoading(true);
     try {
       const res = await fetch('/api/auth/login', {
@@ -60,7 +68,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (data: { username: string; name: string; password?: string; city?: string; interests?: string[] }) => {
+  const register = async (data: {
+    username: string;
+    name: string;
+    password: string;
+    city?: string;
+    interests?: string[];
+    languages?: string[];
+    bio?: string;
+  }) => {
     setLoading(true);
     try {
       const res = await fetch('/api/auth/register', {

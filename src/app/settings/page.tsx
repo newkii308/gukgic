@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTheme } from '@/hooks/use-theme';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuth } from '@/hooks/use-auth';
-import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { NativePush } from '@/lib/capacitor';
 import {
   User,
   Shield,
@@ -21,35 +20,46 @@ import {
   KeyRound,
   Info,
   ChevronRight,
-  LogOut,
   Trash2,
   Lock,
-  Eye,
   UserX,
-  Smartphone,
   Check,
   FileText,
   HelpCircle,
   Settings as SettingsIcon,
-  Sparkles
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { LanguageCode, ThemeMode, User as UserType } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useI18n();
   const { user, logout, updateProfile } = useAuth();
 
   const [activeCategory, setActiveCategory] = useState<
-    'account' | 'privacy' | 'notifications' | 'appearance' | 'language' | 'security' | 'about'
+    'appearance' | 'language' | 'account' | 'privacy' | 'notifications' | 'security' | 'about'
   >('appearance');
 
   // Account Settings state
   const [name, setName] = useState(user?.name || '');
+  const [accountSaved, setAccountSaved] = useState(false);
+
+  // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [accountSaved, setAccountSaved] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  // Delete Account modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Privacy Settings state
   const [profileVisibility, setProfileVisibility] = useState<'public' | 'friends' | 'private'>(
@@ -68,6 +78,10 @@ export default function SettingsPage() {
   const [pushEnabled, setPushEnabled] = useState(user?.settings?.pushNotifications ?? true);
   const [messageNotifs, setMessageNotifs] = useState(user?.settings?.messageNotifications ?? true);
   const [socialNotifs, setSocialNotifs] = useState(user?.settings?.socialNotifications ?? true);
+
+  useEffect(() => {
+    if (user?.name) setName(user.name);
+  }, [user?.name]);
 
   useEffect(() => {
     if (activeCategory === 'privacy') {
@@ -107,6 +121,80 @@ export default function SettingsPage() {
     setTimeout(() => setAccountSaved(false), 2500);
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!currentPassword || !newPassword) {
+      setPasswordError('ກະລຸນາປ້ອນລະຫັດຜ່ານປັດຈຸບັນ ແລະ ລະຫັດຜ່ານໃໝ່');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('ລະຫັດຜ່ານໃໝ່ຕ້ອງມີຢ່າງໜ້ອຍ 6 ຕົວອັກສອນ');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('ລະຫັດຜ່ານຢືນຢັນບໍ່ກົງກັນ (Passwords do not match)');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update password');
+      }
+
+      setPasswordSuccess('ປ່ຽນລະຫັດຜ່ານສຳເລັດແລ້ວ (Password updated)');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(''), 3000);
+    } catch (err: any) {
+      setPasswordError(err.message || 'Error changing password');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      setDeleteError('ກະລຸນາປ້ອນລະຫັດຜ່ານເພື່ອຢືນຢັນ');
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await fetch('/api/auth/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete account');
+      }
+
+      await logout();
+      router.push('/login');
+    } catch (err: any) {
+      setDeleteError(err.message || 'Error deleting account');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleSavePrivacy = async () => {
     await updateProfile({
       settings: {
@@ -128,7 +216,7 @@ export default function SettingsPage() {
     { id: 'account' as const, label: 'Account', icon: User, desc: 'Name, Profile & Password' },
     { id: 'privacy' as const, label: 'Privacy', icon: Lock, desc: 'Visibility & Blocked users' },
     { id: 'notifications' as const, label: 'Notifications', icon: Bell, desc: 'Push & Social alerts' },
-    { id: 'security' as const, label: 'Security', icon: Shield, desc: 'Sessions & Device security' },
+    { id: 'security' as const, label: 'Security', icon: Shield, desc: 'Active session info' },
     { id: 'about' as const, label: 'About', icon: Info, desc: 'Terms, Guidelines & Version' },
   ];
 
@@ -274,47 +362,133 @@ export default function SettingsPage() {
 
           {/* 3. Account Settings */}
           {activeCategory === 'account' && (
-            <div className="rounded-3xl bg-white dark:bg-dark-card border border-slate-200/70 dark:border-slate-800/80 p-5 shadow-sm space-y-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-dark-text flex items-center gap-2">
-                  <User className="w-4 h-4 text-primary-500" />
-                  <span>Account Information</span>
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Manage your personal details and credentials</p>
+            <div className="space-y-4">
+              {/* Profile Details */}
+              <div className="rounded-3xl bg-white dark:bg-dark-card border border-slate-200/70 dark:border-slate-800/80 p-5 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-dark-text flex items-center gap-2">
+                    <User className="w-4 h-4 text-primary-500" />
+                    <span>Account Information</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Manage your personal details and display name</p>
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Display Name
+                    </label>
+                    <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Username
+                    </label>
+                    <Input value={user?.username || ''} disabled className="opacity-60 cursor-not-allowed" />
+                    <span className="text-[10px] text-slate-400">Username cannot be changed</span>
+                  </div>
+
+                  <div className="pt-2">
+                    <Button onClick={handleSaveAccount} size="sm" className="rounded-xl px-5">
+                      {accountSaved ? <Check className="w-4 h-4 mr-1 text-emerald-300" /> : null}
+                      <span>{accountSaved ? 'Saved!' : 'Save Account'}</span>
+                    </Button>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-3 pt-2">
+              {/* Password Change Form */}
+              <div className="rounded-3xl bg-white dark:bg-dark-card border border-slate-200/70 dark:border-slate-800/80 p-5 shadow-sm space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Display Name
-                  </label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-dark-text flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-primary-500" />
+                    <span>Change Password</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Update your password to keep your account secure</p>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Username
-                  </label>
-                  <Input value={user?.username || ''} disabled className="opacity-60 cursor-not-allowed" />
-                  <span className="text-[10px] text-slate-400">Username cannot be changed</span>
-                </div>
+                {passwordError && (
+                  <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
 
-                <div className="pt-2">
-                  <Button onClick={handleSaveAccount} size="sm" className="rounded-xl px-5">
-                    {accountSaved ? <Check className="w-4 h-4 mr-1 text-emerald-300" /> : null}
-                    <span>{accountSaved ? 'Saved!' : 'Save Account'}</span>
-                  </Button>
-                </div>
+                {passwordSuccess && (
+                  <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{passwordSuccess}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword} className="space-y-3 pt-1">
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Current Password
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      New Password (min 6 characters)
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                      Confirm New Password
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      disabled={isUpdatingPassword}
+                      size="sm"
+                      className="rounded-xl px-5"
+                    >
+                      <span>{isUpdatingPassword ? 'Updating...' : 'Update Password'}</span>
+                    </Button>
+                  </div>
+                </form>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+              {/* Danger Zone: Real Delete Account Modal Trigger */}
+              <div className="rounded-3xl bg-white dark:bg-dark-card border border-red-200/60 dark:border-red-950/60 p-5 shadow-sm space-y-3">
                 <h4 className="text-xs font-bold text-red-600 flex items-center gap-1.5">
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Danger Zone</span>
                 </h4>
+                <p className="text-xs text-slate-400">
+                  Permanently delete your account and all associated posts, comments, and messages. This action cannot be undone.
+                </p>
                 <button
                   type="button"
-                  onClick={() => alert('Account deletion requested. Please contact support.')}
+                  onClick={() => setShowDeleteModal(true)}
                   className="px-4 py-2 rounded-xl text-xs font-bold text-red-600 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 transition-colors"
                 >
                   Delete Account
@@ -361,6 +535,7 @@ export default function SettingsPage() {
                   >
                     <option value="everyone">Everyone on GUKGIC</option>
                     <option value="friends_of_friends">Friends of Friends</option>
+                    <option value="none">No one</option>
                   </select>
                 </div>
 
@@ -384,7 +559,7 @@ export default function SettingsPage() {
                           key={b.id}
                           className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-dark-elevated"
                         >
-                          <span className="text-xs font-semibold">{b.name}</span>
+                          <span className="text-xs font-semibold">{b.name} (@{b.username})</span>
                           <button
                             onClick={() => handleUnblock(b.id)}
                             className="text-xs text-primary-600 hover:underline font-bold"
@@ -423,7 +598,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={pushEnabled}
                     onChange={(e) => setPushEnabled(e.target.checked)}
-                    className="w-4 h-4 accent-primary-600 rounded"
+                    className="w-4 h-4 accent-primary-600 rounded cursor-pointer"
                   />
                 </div>
 
@@ -436,7 +611,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={messageNotifs}
                     onChange={(e) => setMessageNotifs(e.target.checked)}
-                    className="w-4 h-4 accent-primary-600 rounded"
+                    className="w-4 h-4 accent-primary-600 rounded cursor-pointer"
                   />
                 </div>
 
@@ -449,7 +624,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={socialNotifs}
                     onChange={(e) => setSocialNotifs(e.target.checked)}
-                    className="w-4 h-4 accent-primary-600 rounded"
+                    className="w-4 h-4 accent-primary-600 rounded cursor-pointer"
                   />
                 </div>
               </div>
@@ -473,18 +648,7 @@ export default function SettingsPage() {
                     <span className="text-xs font-bold text-slate-900 dark:text-dark-text">Current Active Session</span>
                     <Badge variant="success" size="sm">Online</Badge>
                   </div>
-                  <p className="text-[11px] text-slate-400">Chrome on Windows • Vientiane, Laos</p>
-                </div>
-
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => alert('All other sessions logged out')}
-                    className="text-xs rounded-xl"
-                  >
-                    Logout From All Other Devices
-                  </Button>
+                  <p className="text-[11px] text-slate-400">Authenticated via Secure HTTP-only JWT Cookie</p>
                 </div>
               </div>
             </div>
@@ -537,13 +701,76 @@ export default function SettingsPage() {
 
                 <div className="p-3 text-center text-xs text-slate-400 pt-3">
                   <p className="font-bold text-slate-700 dark:text-slate-300">GUKGIC Social Platform</p>
-                  <p className="text-[11px] mt-0.5">Version 1.0.0 (Next.js 14 + Capacitor Ready)</p>
+                  <p className="text-[11px] mt-0.5">Version 1.0.0 (Production Persistence Architecture)</p>
                 </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-red-600 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                <span>Delete Account</span>
+              </h3>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-elevated"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-dark-muted">
+              Are you sure you want to delete your account? All your posts, messages, friendships, and profile data will be permanently wiped.
+            </p>
+
+            {deleteError && (
+              <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                Enter your password to confirm:
+              </label>
+              <Input
+                type="password"
+                placeholder="••••••••"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDeleteModal(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={isDeleting}
+                onClick={handleDeleteAccount}
+                className="rounded-xl text-xs bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? 'Deleting...' : 'Permanently Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -19,7 +19,11 @@ export async function POST(
     }
 
     const res = await db.toggleLikePost(params.id, user.id);
-    return NextResponse.json(res);
+    return NextResponse.json({
+      isLiked: res.isLiked,
+      liked: res.isLiked,
+      likesCount: res.likesCount,
+    });
   } catch (err: any) {
     if (err.message === 'Post not found') {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 });

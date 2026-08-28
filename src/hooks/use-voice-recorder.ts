@@ -13,6 +13,7 @@ export function useVoiceRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioResult, setAudioResult] = useState<VoiceRecording | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -22,8 +23,13 @@ export function useVoiceRecorder() {
 
   const startRecording = useCallback(async () => {
     try {
+      setError(null);
       setAudioResult(null);
       audioChunksRef.current = [];
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Audio recording is not supported in this browser.');
+      }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -38,11 +44,15 @@ export function useVoiceRecorder() {
       };
 
       mediaRecorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) {
+          setIsRecording(false);
+          return;
+        }
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const audioUrl = URL.createObjectURL(audioBlob);
         const finalDuration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
 
-        // Convert to base64
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
         reader.onloadend = () => {
@@ -55,7 +65,6 @@ export function useVoiceRecorder() {
           });
         };
 
-        // Stop stream
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
@@ -70,15 +79,10 @@ export function useVoiceRecorder() {
       timerRef.current = setInterval(() => {
         setRecordingDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
-    } catch (err) {
-      console.warn('Microphone access error or mock environment:', err);
-      // Mock recording for testing without real microphone hardware
-      setIsRecording(true);
-      startTimeRef.current = Date.now();
-      setRecordingDuration(0);
-      timerRef.current = setInterval(() => {
-        setRecordingDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
-      }, 1000);
+    } catch (err: any) {
+      console.error('Microphone access error:', err);
+      setError(err.message || 'Microphone access denied');
+      setIsRecording(false);
     }
   }, []);
 
@@ -91,6 +95,12 @@ export function useVoiceRecorder() {
 
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.onstop = async () => {
+          if (audioChunksRef.current.length === 0) {
+            setIsRecording(false);
+            resolve(null);
+            return;
+          }
+
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           const audioUrl = URL.createObjectURL(audioBlob);
           const finalDuration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
@@ -112,17 +122,8 @@ export function useVoiceRecorder() {
         };
         mediaRecorderRef.current.stop();
       } else {
-        // Fallback for mocked recorder
-        const duration = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
-        const res: VoiceRecording = {
-          blob: new Blob([], { type: 'audio/webm' }),
-          url: '',
-          duration,
-          base64: 'sample_audio_voice_message',
-        };
-        setAudioResult(res);
         setIsRecording(false);
-        resolve(res);
+        resolve(null);
       }
     });
   }, []);
@@ -142,12 +143,14 @@ export function useVoiceRecorder() {
     setIsRecording(false);
     setAudioResult(null);
     setRecordingDuration(0);
+    setError(null);
   }, []);
 
   return {
     isRecording,
     recordingDuration,
     audioResult,
+    error,
     startRecording,
     stopRecording,
     cancelRecording,

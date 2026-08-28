@@ -10,7 +10,7 @@ const port = parseInt(process.env.PORT || '3000', 10);
 const JWT_SECRET = process.env.JWT_SECRET || (dev ? 'gukgic-dev-jwt-secret-key-change-in-prod-2026' : null);
 
 const prisma = new PrismaClient();
-const app = next({ dev, hostname, port });
+const app = next({ dev, hostname, port, dir: __dirname });
 const handle = app.getRequestHandler();
 
 function parseCookies(cookieHeader) {
@@ -54,7 +54,7 @@ app.prepare().then(() => {
 
   const onlineUsers = new Map(); // socket.id -> userId
 
-  // Socket.IO Authentication Middleware
+  // Socket.IO Authentication Middleware (Strict JWT Session)
   io.use((socket, next) => {
     try {
       const cookieHeader = socket.handshake.headers.cookie;
@@ -62,11 +62,6 @@ app.prepare().then(() => {
       const token = cookies['gukgic_token'] || cookies['friend_token'] || socket.handshake.auth?.token;
 
       if (!token) {
-        // Fallback in dev for unauthenticated sockets
-        if (dev && socket.handshake.query.userId) {
-          socket.data.userId = socket.handshake.query.userId;
-          return next();
-        }
         return next(new Error('Authentication required'));
       }
 
@@ -97,7 +92,7 @@ app.prepare().then(() => {
     socket.on('join_conversation', async ({ conversationId }) => {
       if (!conversationId || !userId) return;
       try {
-        // Verify user is a member of this conversation before joining room
+        // Verify user is a verified member of this conversation before joining room
         const membership = await prisma.conversationMember.findUnique({
           where: {
             conversationId_userId: { conversationId, userId },
@@ -129,6 +124,9 @@ app.prepare().then(() => {
         });
         if (!membership) return;
 
+        // Force sender identity to authenticated socket session
+        data.senderId = userId;
+
         // Broadcast verified message to conversation room
         socket.to(data.conversationId).emit('new_message', data);
       } catch (err) {
@@ -136,9 +134,20 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on('typing', ({ conversationId, isTyping }) => {
-      if (conversationId && userId) {
-        socket.to(conversationId).emit('user_typing', { userId, isTyping });
+    socket.on('typing', async ({ conversationId, isTyping }) => {
+      if (!conversationId || !userId) return;
+      try {
+        // Verify conversation membership before broadcasting typing
+        const membership = await prisma.conversationMember.findUnique({
+          where: {
+            conversationId_userId: { conversationId, userId },
+          },
+        });
+        if (membership) {
+          socket.to(conversationId).emit('user_typing', { userId, isTyping: Boolean(isTyping) });
+        }
+      } catch (err) {
+        console.error('Error handling socket typing event:', err);
       }
     });
 

@@ -28,18 +28,6 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to sign in');
-      }
-
-      // Re-fetch user in auth context and navigate home
       await login(username, password);
       router.push('/');
       router.refresh();

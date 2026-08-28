@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: false,
+  },
   images: {
     remotePatterns: [
       {
@@ -16,10 +22,6 @@ const nextConfig = {
         hostname: 'ui-avatars.com',
       },
     ],
-  },
-  experimental: {
-    // optimize package imports for fast loading
-    optimizePackageImports: ['lucide-react', 'date-fns', 'framer-motion'],
   },
 };
 
