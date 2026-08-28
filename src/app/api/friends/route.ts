@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const user = getCurrentUserFromRequest(req);
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await getCurrentUserFromRequest(req);
+    if (!user) {
+      return unauthorizedResponse('Unauthorized');
+    }
+
+    const [friends, requests, sentRequests] = await Promise.all([
+      db.getFriends(user.id),
+      db.getPendingRequests(user.id),
+      db.getSentRequests(user.id),
+    ]);
+
+    return NextResponse.json({ friends, requests, sentRequests });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Failed to fetch friends data' }, { status: 500 });
   }
-
-  const friends = db.getFriends(user.id);
-  const requests = db.getPendingRequests(user.id);
-  const sentRequests = db.getSentRequests(user.id);
-
-  return NextResponse.json({ friends, requests, sentRequests });
 }

@@ -1,20 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, formatUser } from '@/lib/db';
 import { signToken, comparePassword, TOKEN_COOKIE_NAME } from '@/lib/auth';
+import { loginSchema } from '@/lib/schemas';
+import { authLimiter } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { username, password } = body;
-
-    if (!username || !password) {
+    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
+    const rateCheck = authLimiter.check(30, `login_${ip}`);
+    if (!rateCheck.success) {
       return NextResponse.json(
-        { error: 'ກະລຸນາປ້ອນ Username ແລະ ລະຫັດຜ່ານ (Username and password are required)' },
+        { error: 'ພະຍາຍາມເຂົ້າສູ່ລະບົບຫຼາຍເກີນໄປ ກະລຸນາລໍຖ້າ 1 ນາທີ (Too many login attempts)' },
+        { status: 429 }
+      );
+    }
+
+    const body = await req.json();
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
 
-    const userWithHash = db.getUserWithPassword(username.trim());
+    const { username, password } = parsed.data;
+
+    const userWithHash = await db.getUserWithPassword(username);
     if (!userWithHash) {
       return NextResponse.json(
         { error: 'Username ຫຼື ລະຫັດຜ່ານບໍ່ຖືກຕ້ອງ (Invalid username or password)' },
@@ -22,7 +34,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (userWithHash.isBanned) {
+    if (userWithHash.isBanned || userWithHash.isSuspended) {
       return NextResponse.json(
         { error: 'ບັນຊີຂອງທ່ານຖືກລະງັບການໃຊ້ງານ (Your account has been suspended)' },
         { status: 403 }
@@ -38,7 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { passwordHash, ...user } = userWithHash;
+    const user = formatUser(userWithHash);
     const token = signToken(user);
 
     const res = NextResponse.json({ user, token });
@@ -52,6 +64,6 @@ export async function POST(req: NextRequest) {
 
     return res;
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'ເກີດຂໍ້ຜິດພາດໃນການເຂົ້າສູ່ລະບົບ' }, { status: 500 });
   }
 }

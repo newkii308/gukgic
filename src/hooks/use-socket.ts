@@ -13,6 +13,7 @@ export function useSocket(userId?: string) {
 
     const socket = io({
       path: '/api/socket',
+      withCredentials: true,
       query: { userId },
       transports: ['websocket', 'polling'],
     });

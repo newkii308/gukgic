@@ -1,32 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs';
-import { getCurrentUserFromRequest } from '@/lib/auth';
-
-const ALLOWED_MIME_TYPES: Record<string, string> = {
-  // Images
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-  'image/gif': '.gif',
-  // Audio
-  'audio/webm': '.webm',
-  'audio/wav': '.wav',
-  'audio/mp3': '.mp3',
-  'audio/mpeg': '.mp3',
-  'audio/ogg': '.ogg',
-  'audio/m4a': '.m4a',
-  'audio/mp4': '.m4a',
-  'audio/x-m4a': '.m4a',
-};
-
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
+import { storage } from '@/lib/storage';
+import { uploadLimiter } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
-    const user = getCurrentUserFromRequest(req);
+    const user = await getCurrentUserFromRequest(req);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedResponse('Unauthorized');
+    }
+
+    const rateCheck = uploadLimiter.check(15, `upload_${user.id}`);
+    if (!rateCheck.success) {
+      return NextResponse.json({ error: 'Too many uploads. Please wait a moment.' }, { status: 429 });
     }
 
     const formData = await req.formData();
@@ -36,34 +22,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File exceeds 15MB size limit' }, { status: 400 });
-    }
-
     const mimeType = file.type || 'application/octet-stream';
-    const ext = ALLOWED_MIME_TYPES[mimeType.toLowerCase()] || path.extname(file.name) || '.bin';
-
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
-    const safeFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
-    const filePath = path.join(uploadsDir, safeFileName);
-
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    fs.writeFileSync(filePath, buffer);
 
-    const publicUrl = `/uploads/${safeFileName}`;
+    const result = await storage.upload(buffer, file.name || 'upload.bin', mimeType);
 
     return NextResponse.json({
-      url: publicUrl,
-      filename: safeFileName,
-      size: file.size,
-      mimeType,
+      url: result.url,
+      size: result.size,
+      mimeType: result.mimeType,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Upload failed' }, { status: 500 });
+    return NextResponse.json({ error: err.message || 'Upload failed' }, { status: 400 });
   }
 }

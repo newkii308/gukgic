@@ -1,11 +1,21 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { User } from '@/types';
 import { db } from '@/lib/db';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'gukgic-lao-social-jwt-secret-key-2026-genz';
 export const TOKEN_COOKIE_NAME = 'gukgic_token';
+
+export function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: JWT_SECRET environment variable is required in production');
+    }
+    return 'gukgic-dev-jwt-secret-key-change-in-prod-2026';
+  }
+  return secret;
+}
 
 export interface TokenPayload {
   userId: string;
@@ -22,14 +32,14 @@ export function signToken(user: User): string {
       username: user.username,
       role: user.role,
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: '7d' }
   );
 }
 
 export function verifyToken(token: string): TokenPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload;
+    return jwt.verify(token, getJwtSecret()) as TokenPayload;
   } catch {
     return null;
   }
@@ -43,7 +53,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
-export function getCurrentUserFromRequest(req: NextRequest): User | null {
+export async function getCurrentUserFromRequest(req: NextRequest): Promise<User | null> {
   try {
     // 1. Try Bearer token in Authorization header
     const authHeader = req.headers.get('authorization');
@@ -63,11 +73,19 @@ export function getCurrentUserFromRequest(req: NextRequest): User | null {
     const payload = verifyToken(token);
     if (!payload || !payload.userId) return null;
 
-    const user = db.getUserById(payload.userId);
-    if (!user || user.isBanned) return null;
+    const user = await db.getUserById(payload.userId);
+    if (!user || user.isBanned || user.isSuspended) return null;
 
     return user;
   } catch {
     return null;
   }
+}
+
+export function unauthorizedResponse(message = 'Unauthorized'): NextResponse {
+  return NextResponse.json({ error: message }, { status: 401 });
+}
+
+export function forbiddenResponse(message = 'Forbidden'): NextResponse {
+  return NextResponse.json({ error: message }, { status: 403 });
 }

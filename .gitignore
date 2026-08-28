@@ -31,3 +31,7 @@ next-env.d.ts
 
 # Ephemeral local data store
 /.data/
+*.db
+*.db-journal
+*.db-wal
+/public/uploads/

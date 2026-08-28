@@ -45,7 +45,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onDelete }) => {
     setLikesCount((prev) => (nextState ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
-      await fetch(`/api/posts/${post.id}/like`, { method: 'POST' });
+      const res = await fetch(`/api/posts/${post.id}/like`, { method: 'POST' });
+      if (!res.ok) {
+        throw new Error('Like failed');
+      }
+      const data = await res.json();
+      if (typeof data.likesCount === 'number') {
+        setLikesCount(data.likesCount);
+      }
     } catch {
       // Revert if error
       setIsLiked(!nextState);

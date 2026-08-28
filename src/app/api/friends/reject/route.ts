@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const user = getCurrentUserFromRequest(req);
+    const user = await getCurrentUserFromRequest(req);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedResponse('Unauthorized');
     }
 
     const body = await req.json();
     const { requestId } = body;
+    if (!requestId) {
+      return NextResponse.json({ error: 'Request ID is required' }, { status: 400 });
+    }
 
-    const success = db.rejectFriendRequest(requestId, user.id);
+    const success = await db.rejectFriendRequest(requestId, user.id);
     return NextResponse.json({ success });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to reject friend request' }, { status: 500 });
   }
 }

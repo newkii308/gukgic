@@ -1,20 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = getCurrentUserFromRequest(req);
+    const user = await getCurrentUserFromRequest(req);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedResponse('Unauthorized');
     }
 
-    const success = db.deleteMessage(params.id, user.id);
-    return NextResponse.json({ success });
+    const success = await db.deleteMessage(params.id, user.id);
+    if (!success) {
+      return NextResponse.json({ error: 'Message not found or unauthorized' }, { status: 403 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Message deleted' });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to delete message' }, { status: 500 });
   }
 }

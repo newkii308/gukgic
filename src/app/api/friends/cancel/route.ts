@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const user = getCurrentUserFromRequest(req);
+    const user = await getCurrentUserFromRequest(req);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedResponse('Unauthorized');
     }
 
     const body = await req.json();
-    const { targetUserId } = body;
+    const { requestId, targetUserId } = body;
 
-    const success = db.cancelFriendRequest(user.id, targetUserId);
+    let targetReqId = requestId;
+    if (!targetReqId && targetUserId) {
+      const sent = await db.getSentRequests(user.id);
+      const req = sent.find((r) => r.receiverId === targetUserId);
+      if (req) targetReqId = req.id;
+    }
+
+    if (!targetReqId) {
+      return NextResponse.json({ error: 'Request not found' }, { status: 400 });
+    }
+
+    const success = await db.cancelFriendRequest(targetReqId, user.id);
     return NextResponse.json({ success });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to cancel friend request' }, { status: 500 });
   }
 }

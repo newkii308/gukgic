@@ -40,6 +40,8 @@ model User {
   notifications       Notification[]       @relation("UserNotifications")
   sentNotifications   Notification[]       @relation("SenderNotifications")
   reportsFiled        Report[]             @relation("Reporter")
+  @@index([role])
+  @@index([isBanned])
 }
 
 model Friendship {
@@ -52,6 +54,8 @@ model Friendship {
   user2     User     @relation("User2Friendships", fields: [user2Id], references: [id], onDelete: Cascade)
 
   @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
 }
 
 model FriendRequest {
@@ -63,6 +67,10 @@ model FriendRequest {
 
   sender     User     @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
   receiver   User     @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
 }
 
 model Block {
@@ -75,6 +83,8 @@ model Block {
   blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
 }
 
 model Post {
@@ -90,6 +100,9 @@ model Post {
   author     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   comments   PostComment[]
   likes      PostLike[]
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model PostLike {
@@ -102,6 +115,8 @@ model PostLike {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
 }
 
 model PostComment {
@@ -114,6 +129,10 @@ model PostComment {
 
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   author    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Conversation {
@@ -123,6 +142,8 @@ model Conversation {
 
   members   ConversationMember[]
   messages  Message[]
+
+  @@index([updatedAt])
 }
 
 model ConversationMember {
@@ -135,6 +156,8 @@ model ConversationMember {
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
 }
 
 model Message {
@@ -152,6 +175,10 @@ model Message {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -167,6 +194,10 @@ model Notification {
 
   user      User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
   sender    User?    @relation("SenderNotifications", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
 }
 
 model Advertisement {
@@ -182,6 +213,8 @@ model Advertisement {
   impressions Int      @default(0)
   clicks      Int      @default(0)
   createdAt   DateTime @default(now())
+
+  @@index([isActive])
 }
 
 model Report {
@@ -198,6 +231,10 @@ model Report {
   createdAt   DateTime  @default(now())
 
   reporter    User      @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@index([reporterId])
 }
 
 model AuditLog {
@@ -209,4 +246,8 @@ model AuditLog {
   targetId   String
   details    String
   createdAt  DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }

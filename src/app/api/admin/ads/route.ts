@@ -3,15 +3,19 @@ import { db } from '@/lib/db';
 import { requireAdminOrModerator } from '@/lib/admin-auth';
 
 export async function GET(req: NextRequest) {
-  const auth = requireAdminOrModerator(req);
-  if (auth instanceof NextResponse) return auth;
+  try {
+    const auth = await requireAdminOrModerator(req);
+    if (auth instanceof NextResponse) return auth;
 
-  const ads = db.getAllAds();
-  return NextResponse.json({ ads });
+    const ads = await db.getAllAds();
+    return NextResponse.json({ ads });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Failed to fetch ads' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const auth = requireAdminOrModerator(req);
+  const auth = await requireAdminOrModerator(req);
   if (auth instanceof NextResponse) return auth;
 
   try {
@@ -22,7 +26,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const newAd = db.createAd({
+    const newAd = await db.createAd({
       title,
       sponsor,
       description,
@@ -33,7 +37,7 @@ export async function POST(req: NextRequest) {
       isActive: isActive !== undefined ? isActive : true,
     });
 
-    db.addAuditLog({
+    await db.addAuditLog({
       adminId: auth.user.id,
       adminName: auth.user.name,
       action: 'CREATE_ADVERTISEMENT',
@@ -44,6 +48,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ad: newAd }, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create ad' }, { status: 500 });
   }
 }

@@ -4,8 +4,8 @@ export type UserRole = 'user' | 'moderator' | 'admin';
 
 export interface UserSettings {
   profileVisibility: 'public' | 'friends' | 'private';
-  postVisibility: 'public' | 'friends';
-  whoCanSendRequests: 'everyone' | 'friends_of_friends';
+  postVisibility: 'public' | 'friends' | 'private';
+  whoCanSendRequests: 'everyone' | 'friends_of_friends' | 'none';
   pushNotifications: boolean;
   messageNotifications: boolean;
   socialNotifications: boolean;

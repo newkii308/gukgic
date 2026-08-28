@@ -1,24 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
+import { apiLimiter } from '@/lib/rate-limit';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const user = getCurrentUserFromRequest(req);
+    const user = await getCurrentUserFromRequest(req);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return unauthorizedResponse('Unauthorized. Please sign in to like.');
     }
 
-    const res = db.toggleLikePost(params.id, user.id);
-    if (!res) {
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    const rateCheck = apiLimiter.check(60, `like_${user.id}`);
+    if (!rateCheck.success) {
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
     }
 
+    const res = await db.toggleLikePost(params.id, user.id);
     return NextResponse.json(res);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    if (err.message === 'Post not found') {
+      return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+    }
+    return NextResponse.json({ error: 'Failed to update like status' }, { status: 500 });
   }
 }

@@ -55,10 +55,10 @@ export default function SettingsPage() {
   const [profileVisibility, setProfileVisibility] = useState<'public' | 'friends' | 'private'>(
     user?.settings?.profileVisibility || 'public'
   );
-  const [postVisibility, setPostVisibility] = useState<'public' | 'friends'>(
+  const [postVisibility, setPostVisibility] = useState<'public' | 'friends' | 'private'>(
     user?.settings?.postVisibility || 'public'
   );
-  const [whoCanSendRequests, setWhoCanSendRequests] = useState<'everyone' | 'friends_of_friends'>(
+  const [whoCanSendRequests, setWhoCanSendRequests] = useState<'everyone' | 'friends_of_friends' | 'none'>(
     user?.settings?.whoCanSendRequests || 'everyone'
   );
   const [blockedUsers, setBlockedUsers] = useState<UserType[]>([]);

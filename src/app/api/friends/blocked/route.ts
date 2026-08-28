@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const user = getCurrentUserFromRequest(req);
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const user = await getCurrentUserFromRequest(req);
+    if (!user) {
+      return unauthorizedResponse('Unauthorized');
+    }
 
-  const blocked = db.getBlockedUsers(user.id);
-  return NextResponse.json({ blocked });
+    const blocked = await db.getBlockedUsers(user.id);
+    return NextResponse.json({ blocked });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Failed to fetch blocked users' }, { status: 500 });
+  }
 }

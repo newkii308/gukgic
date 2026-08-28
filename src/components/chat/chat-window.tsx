@@ -131,11 +131,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ conversationId }) => {
         socketSendMessage({
           conversationId,
           senderId: user.id,
-          ...params,
+          ...data.message,
         });
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
     } catch {
-      //
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
     }
   };
 

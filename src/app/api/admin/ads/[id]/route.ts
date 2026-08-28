@@ -6,17 +6,17 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = requireAdminOrModerator(req);
+  const auth = await requireAdminOrModerator(req);
   if (auth instanceof NextResponse) return auth;
 
   try {
     const body = await req.json();
-    const updated = db.updateAd(params.id, body);
+    const updated = await db.updateAd(params.id, body);
     if (!updated) {
       return NextResponse.json({ error: 'Ad not found' }, { status: 404 });
     }
 
-    db.addAuditLog({
+    await db.addAuditLog({
       adminId: auth.user.id,
       adminName: auth.user.name,
       action: 'UPDATE_ADVERTISEMENT',
@@ -27,7 +27,7 @@ export async function PATCH(
 
     return NextResponse.json({ ad: updated });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -35,12 +35,12 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const auth = requireAdminOrModerator(req);
+  const auth = await requireAdminOrModerator(req);
   if (auth instanceof NextResponse) return auth;
 
-  const success = db.deleteAd(params.id);
+  const success = await db.deleteAd(params.id);
   if (success) {
-    db.addAuditLog({
+    await db.addAuditLog({
       adminId: auth.user.id,
       adminName: auth.user.name,
       action: 'DELETE_ADVERTISEMENT',

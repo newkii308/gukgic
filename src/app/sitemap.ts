@@ -1,17 +1,21 @@
 import { MetadataRoute } from 'next';
 import { db } from '@/lib/db';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://gukgic.la';
 
-  const users = db.getUsers();
-
-  const userUrls: MetadataRoute.Sitemap = users.map((user) => ({
-    url: `${baseUrl}/u/${user.username}`,
-    lastModified: new Date(user.createdAt),
-    changeFrequency: 'weekly',
-    priority: 0.8,
-  }));
+  let userUrls: MetadataRoute.Sitemap = [];
+  try {
+    const users = await db.getUsers();
+    userUrls = users.map((user) => ({
+      url: `${baseUrl}/u/${user.username}`,
+      lastModified: new Date(user.createdAt),
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    }));
+  } catch {
+    // fallback if DB not ready during build
+  }
 
   const staticUrls: MetadataRoute.Sitemap = [
     {

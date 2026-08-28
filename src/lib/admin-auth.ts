@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUserFromRequest } from '@/lib/auth';
 import { User } from '@/types';
 
-export function requireAdminOrModerator(req: NextRequest): { user: User } | NextResponse {
-  const user = getCurrentUserFromRequest(req);
+export async function requireAdminOrModerator(req: NextRequest): Promise<{ user: User } | NextResponse> {
+  const user = await getCurrentUserFromRequest(req);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
   }
@@ -15,8 +15,8 @@ export function requireAdminOrModerator(req: NextRequest): { user: User } | Next
   return { user };
 }
 
-export function requireAdminOnly(req: NextRequest): { user: User } | NextResponse {
-  const user = getCurrentUserFromRequest(req);
+export async function requireAdminOnly(req: NextRequest): Promise<{ user: User } | NextResponse> {
+  const user = await getCurrentUserFromRequest(req);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized. Please sign in.' }, { status: 401 });
   }

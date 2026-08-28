@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUserFromRequest, unauthorizedResponse } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
-  const user = getCurrentUserFromRequest(req);
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  try {
+    const user = await getCurrentUserFromRequest(req);
+    if (!user) {
+      return unauthorizedResponse('Unauthorized');
+    }
+
+    const [notifications, unreadCount] = await Promise.all([
+      db.getNotifications(user.id),
+      db.getUnreadNotificationsCount(user.id),
+    ]);
+
+    return NextResponse.json({ notifications, unreadCount });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });
   }
-
-  const notifications = db.getNotifications(user.id);
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-
-  return NextResponse.json({ notifications, unreadCount });
 }
