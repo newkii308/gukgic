@@ -41,7 +41,7 @@ export const VoicePlayer: React.FC<VoicePlayerProps> = ({
   }, [isPlaying, duration]);
 
   const togglePlay = () => {
-    if (audioRef.current && mediaUrl && mediaUrl.startsWith('blob:')) {
+    if (audioRef.current && mediaUrl && (mediaUrl.startsWith('/uploads') || mediaUrl.startsWith('http') || mediaUrl.startsWith('blob:'))) {
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
@@ -50,7 +50,6 @@ export const VoicePlayer: React.FC<VoicePlayerProps> = ({
         setIsPlaying(true);
       }
     } else {
-      // Mock playback
       if (isPlaying) {
         setIsPlaying(false);
       } else {
@@ -64,10 +63,13 @@ export const VoicePlayer: React.FC<VoicePlayerProps> = ({
 
   return (
     <div className="flex items-center gap-2.5 py-1 min-w-[190px] max-w-[240px]">
-      {mediaUrl && mediaUrl.startsWith('blob:') && (
+      {mediaUrl && (
         <audio
           ref={audioRef}
           src={mediaUrl}
+          onTimeUpdate={() => {
+            if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+          }}
           onEnded={() => {
             setIsPlaying(false);
             setCurrentTime(0);

@@ -75,11 +75,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (onTyping) onTyping(false);
   };
 
-  const handleSendVoice = (recording: VoiceRecording) => {
+  const handleSendVoice = async (recording: VoiceRecording) => {
+    let mediaUrl = recording.url;
+    if (recording.blob && recording.blob.size > 0) {
+      const uploaded = await NativeCamera.uploadFile(recording.blob, `voice_${Date.now()}.webm`);
+      if (uploaded) mediaUrl = uploaded;
+    }
+
     onSendMessage({
       content: t('chat.voiceMessage'),
       type: 'voice',
-      mediaUrl: recording.url || recording.base64,
+      mediaUrl: mediaUrl || recording.base64,
       duration: recording.duration,
       replyTo: replyingTo
         ? {
@@ -95,11 +101,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handlePickImage = async () => {
     const res = await NativeCamera.pickImage();
-    if (res?.dataUrl) {
+    const mediaUrl = res?.uploadedUrl || res?.dataUrl;
+    if (mediaUrl) {
       onSendMessage({
         content: t('chat.imageMessage'),
         type: 'image',
-        mediaUrl: res.dataUrl,
+        mediaUrl: mediaUrl,
         replyTo: replyingTo
           ? {
               id: replyingTo.id,

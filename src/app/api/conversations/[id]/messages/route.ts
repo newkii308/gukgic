@@ -6,8 +6,17 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const messages = db.getMessages(params.id);
-  return NextResponse.json({ messages });
+  const user = getCurrentUserFromRequest(req);
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const messages = db.getMessages(params.id, user.id);
+    return NextResponse.json({ messages });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Forbidden' }, { status: 403 });
+  }
 }
 
 export async function POST(
@@ -26,7 +35,7 @@ export async function POST(
     const message = db.createMessage({
       conversationId: params.id,
       senderId: user.id,
-      content,
+      content: content || (type === 'voice' ? 'Voice Message' : type === 'image' ? 'Image Attachment' : ''),
       type,
       mediaUrl,
       duration,
