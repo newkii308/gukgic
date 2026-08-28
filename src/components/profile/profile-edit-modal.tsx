@@ -34,15 +34,17 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 
   const handlePickAvatar = async () => {
     const res = await NativeCamera.pickImage();
-    if (res?.dataUrl) {
-      setAvatar(res.dataUrl);
+    const url = res?.uploadedUrl || res?.dataUrl;
+    if (url) {
+      setAvatar(url);
     }
   };
 
   const handlePickCover = async () => {
     const res = await NativeCamera.pickImage();
-    if (res?.dataUrl) {
-      setCoverImage(res.dataUrl);
+    const url = res?.uploadedUrl || res?.dataUrl;
+    if (url) {
+      setCoverImage(url);
     }
   };
 
