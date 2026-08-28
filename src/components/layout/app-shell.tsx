@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Header } from './header';
 import { MobileNav } from './mobile-nav';
 import { DesktopSidebar } from './desktop-sidebar';
@@ -11,7 +12,15 @@ interface AppShellProps {
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
+  const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Isolate Admin layout completely from User App
+  const isAdmin = pathname.startsWith('/admin');
+
+  if (isAdmin) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-light-bg dark:bg-dark-bg text-slate-900 dark:text-dark-text transition-colors duration-200">

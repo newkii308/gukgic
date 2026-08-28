@@ -7,18 +7,18 @@ import { AppShell } from '@/components/layout/app-shell';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Friend Social App — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
-    template: '%s | Friend Social App',
+    default: 'GUKGIC — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
+    template: '%s | GUKGIC',
   },
-  description: 'Social platform for finding friends, sharing moments, and real-time chat designed for Lao Gen Z.',
-  keywords: ['Friend App Laos', 'ຫາເພື່ອນລາວ', 'Social Lao', 'Gen Z Laos', 'Vientiane', 'Luang Prabang', 'Find Friends'],
-  authors: [{ name: 'Friend Social Team' }],
-  metadataBase: new URL('https://friend-social.la'),
+  description: 'GUKGIC: The modern social web application for finding friends, sharing moments, and real-time messaging designed for Lao Gen Z.',
+  keywords: ['GUKGIC', 'Friend App Laos', 'ຫາເພື່ອນລາວ', 'Social Lao', 'Gen Z Laos', 'Vientiane', 'Luang Prabang', 'Find Friends'],
+  authors: [{ name: 'GUKGIC Team' }],
+  metadataBase: new URL('https://gukgic.la'),
   openGraph: {
-    title: 'Friend Social App — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
-    description: 'Find friends, share photos, send voice messages, and connect across Laos.',
-    url: 'https://friend-social.la',
-    siteName: 'Friend Social',
+    title: 'GUKGIC — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
+    description: 'Find friends, share photos, send voice messages, and connect across Laos on GUKGIC.',
+    url: 'https://gukgic.la',
+    siteName: 'GUKGIC',
     locale: 'lo_LA',
     type: 'website',
     images: [
@@ -26,14 +26,14 @@ export const metadata: Metadata = {
         url: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=1200&auto=format&fit=crop&q=80',
         width: 1200,
         height: 630,
-        alt: 'Friend Social App Laos',
+        alt: 'GUKGIC Social App Laos',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Friend Social App — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
-    description: 'Find friends, share photos, send voice messages, and connect across Laos.',
+    title: 'GUKGIC — ພື້ນທີ່ຫາເພື່ອນໃໝ່ຂອງຄົນຮຸ່ນໃໝ່ໃນລາວ',
+    description: 'Find friends, share photos, send voice messages, and connect across Laos on GUKGIC.',
     images: ['https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=1200&auto=format&fit=crop&q=80'],
   },
 };

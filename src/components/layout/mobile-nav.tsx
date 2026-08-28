@@ -1,30 +1,63 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAuth } from '@/hooks/use-auth';
 import {
   Home,
   Users,
   MessageCircle,
   Bell,
-  User,
-  Settings
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface MobileNavProps {
-  unreadMessagesCount?: number;
-  unreadNotificationsCount?: number;
-}
-
-export const MobileNav: React.FC<MobileNavProps> = ({
-  unreadMessagesCount = 1,
-  unreadNotificationsCount = 1,
-}) => {
+export const MobileNav: React.FC = () => {
   const pathname = usePathname();
   const { t } = useI18n();
+  const { user } = useAuth();
+
+  const [unreadMessages, setUnreadMessages] = useState<number>(0);
+  const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
+  const [pendingFriendRequests, setPendingFriendRequests] = useState<number>(0);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchBadgeCounts();
+  }, [user?.id, pathname]);
+
+  const fetchBadgeCounts = async () => {
+    try {
+      const [convRes, notifRes, friendsRes] = await Promise.all([
+        fetch('/api/conversations'),
+        fetch('/api/notifications'),
+        fetch('/api/friends'),
+      ]);
+
+      if (convRes.ok) {
+        const convData = await convRes.json();
+        const unreadMsgTotal = (convData.conversations || []).reduce(
+          (acc: number, c: any) => acc + (c.unreadCount || 0),
+          0
+        );
+        setUnreadMessages(unreadMsgTotal);
+      }
+
+      if (notifRes.ok) {
+        const notifData = await notifRes.json();
+        setUnreadNotifications(notifData.unreadCount || 0);
+      }
+
+      if (friendsRes.ok) {
+        const friendsData = await friendsRes.json();
+        setPendingFriendRequests((friendsData.requests || []).length);
+      }
+    } catch {
+      //
+    }
+  };
 
   const navItems = [
     {
@@ -38,20 +71,21 @@ export const MobileNav: React.FC<MobileNavProps> = ({
       label: t('nav.friends'),
       icon: Users,
       isActive: pathname.startsWith('/friends'),
+      badge: pendingFriendRequests,
     },
     {
       href: '/messages',
       label: t('nav.messages'),
       icon: MessageCircle,
       isActive: pathname.startsWith('/messages'),
-      badge: unreadMessagesCount,
+      badge: unreadMessages,
     },
     {
       href: '/notifications',
       label: t('nav.notifications'),
       icon: Bell,
       isActive: pathname.startsWith('/notifications'),
-      badge: unreadNotificationsCount,
+      badge: unreadNotifications,
     },
     {
       href: '/profile',
@@ -62,8 +96,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-dark-bg/90 backdrop-blur-lg border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom">
-      <div className="flex items-center justify-around h-16 px-2 max-w-md mx-auto">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-dark-bg/90 backdrop-blur-lg border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom select-none">
+      <div className="flex items-center justify-around h-16 px-1 max-w-md mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -73,7 +107,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
               className={cn(
                 'relative flex flex-col items-center justify-center flex-1 h-full py-1 text-[11px] font-medium transition-all select-none',
                 item.isActive
-                  ? 'text-primary-600 dark:text-primary-400 font-semibold'
+                  ? 'text-primary-600 dark:text-primary-400 font-bold'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               )}
             >
@@ -90,7 +124,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                   </span>
                 ) : null}
               </div>
-              <span className="mt-1 leading-none">{item.label}</span>
+              <span className="mt-1 leading-none text-[10px]">{item.label}</span>
               {item.isActive && (
                 <span className="absolute bottom-1 w-1 h-1 rounded-full bg-primary-600 dark:bg-primary-400" />
               )}

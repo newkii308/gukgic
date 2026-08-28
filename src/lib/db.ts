@@ -10,13 +10,14 @@ import {
   NotificationItem,
   Advertisement,
   FriendshipStatus,
-  ReportItem
+  ReportItem,
+  AuditLogItem,
+  UserSettings
 } from '@/types';
 
-// In-memory data store with optional file-based fallback for hot reloads
 interface DatabaseSchema {
   users: User[];
-  passwords: Record<string, string>; // username -> hash
+  passwords: Record<string, string>;
   friendships: { user1Id: string; user2Id: string; createdAt: string }[];
   friendRequests: FriendRequest[];
   posts: Post[];
@@ -27,9 +28,19 @@ interface DatabaseSchema {
   reports: ReportItem[];
   blocks: { blockerId: string; blockedId: string; createdAt: string }[];
   ads: Advertisement[];
+  auditLogs: AuditLogItem[];
 }
 
 const DB_FILE_PATH = path.join(process.cwd(), '.data', 'db.json');
+
+const DEFAULT_SETTINGS: UserSettings = {
+  profileVisibility: 'public',
+  postVisibility: 'public',
+  whoCanSendRequests: 'everyone',
+  pushNotifications: true,
+  messageNotifications: true,
+  socialNotifications: true,
+};
 
 const INITIAL_USERS: User[] = [
   {
@@ -46,6 +57,8 @@ const INITIAL_USERS: User[] = [
     friendsCount: 3,
     postsCount: 2,
     isOnline: true,
+    role: 'admin', // System Administrator for testing /admin
+    settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     mutualFriendsCount: 0,
   },
@@ -63,6 +76,8 @@ const INITIAL_USERS: User[] = [
     friendsCount: 142,
     postsCount: 18,
     isOnline: true,
+    role: 'user',
+    settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
     mutualFriendsCount: 12,
   },
@@ -81,6 +96,8 @@ const INITIAL_USERS: User[] = [
     postsCount: 9,
     isOnline: true,
     lastSeen: 'ມື້ກີ້ນີ້',
+    role: 'moderator',
+    settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
     mutualFriendsCount: 5,
   },
@@ -99,6 +116,8 @@ const INITIAL_USERS: User[] = [
     postsCount: 42,
     isOnline: false,
     lastSeen: '15 ນາທີກ່ອນ',
+    role: 'user',
+    settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
     mutualFriendsCount: 18,
   },
@@ -117,6 +136,8 @@ const INITIAL_USERS: User[] = [
     postsCount: 14,
     isOnline: false,
     lastSeen: '2 ຊົ່ວໂມງກ່ອນ',
+    role: 'user',
+    settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 80 * 24 * 60 * 60 * 1000).toISOString(),
     mutualFriendsCount: 3,
   },
@@ -134,6 +155,8 @@ const INITIAL_USERS: User[] = [
     friendsCount: 180,
     postsCount: 22,
     isOnline: true,
+    role: 'user',
+    settings: { ...DEFAULT_SETTINGS },
     createdAt: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000).toISOString(),
     mutualFriendsCount: 8,
   }
@@ -144,11 +167,15 @@ const INITIAL_ADS: Advertisement[] = [
     id: 'ad_1',
     sponsor: 'Cafe Sinouk Laos',
     title: 'ກາເຟລາວແທ້ 100% ພ້ອມໂປຣໂມຊັ່ນສຸດພິເສດ!',
-    description: 'ພົບກັບເມນູ Dirty Coffee ໃໝ່ລ່າສຸດ ພ້ອມສ່ວນຫຼຸດ 20% ສຳລັບສະມາຊິກ Friend App ພຽງໂຊໂປຣໄຟລ໌!',
+    description: 'ພົບກັບເມນູ Dirty Coffee ໃໝ່ລ່າສຸດ ພ້ອມສ່ວນຫຼຸດ 20% ສຳລັບສະມາຊິກ GUKGIC App ພຽງໂຊໂປຣໄຟລ໌!',
     imageUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&auto=format&fit=crop&q=80',
     ctaText: 'ເບິ່ງສາຂາໃກ້ເຈົ້າ',
     targetUrl: 'https://sinouk-coffee.com',
-    badge: 'ໂຄສະນາ'
+    badge: 'ໂຄສະນາ',
+    isActive: true,
+    impressions: 1240,
+    clicks: 185,
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'ad_2',
@@ -158,7 +185,11 @@ const INITIAL_ADS: Advertisement[] = [
     imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=80',
     ctaText: 'ລົງທະບຽນຟຣີ',
     targetUrl: 'https://laotechsummit.la',
-    badge: 'Sponsored'
+    badge: 'Sponsored',
+    isActive: true,
+    impressions: 3420,
+    clicks: 610,
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
   }
 ];
 
@@ -357,6 +388,33 @@ const INITIAL_FRIENDSHIPS = [
   { user1Id: 'user_me', user2Id: 'user_2', createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString() },
 ];
 
+const INITIAL_REPORTS: ReportItem[] = [
+  {
+    id: 'rep_1',
+    targetType: 'post',
+    targetId: 'post_3',
+    reporterId: 'user_1',
+    reporter: INITIAL_USERS[1],
+    reason: 'Spam or irrelevant content',
+    details: 'Looking for gamers on wrong channel',
+    status: 'pending',
+    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+  }
+];
+
+const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
+  {
+    id: 'audit_1',
+    adminId: 'user_me',
+    adminName: 'Khampheng (You)',
+    action: 'SYSTEM_STARTUP',
+    targetType: 'SYSTEM',
+    targetId: 'gukgic_v1',
+    details: 'System initialized and database configured.',
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  }
+];
+
 class MemoryDB {
   private data: DatabaseSchema;
 
@@ -378,9 +436,10 @@ class MemoryDB {
       conversations: [...INITIAL_CONVERSATIONS],
       messages: [...INITIAL_MESSAGES],
       notifications: [...INITIAL_NOTIFICATIONS],
-      reports: [],
+      reports: [...INITIAL_REPORTS],
       blocks: [],
       ads: [...INITIAL_ADS],
+      auditLogs: [...INITIAL_AUDIT_LOGS],
     };
     this.loadFromDisk();
   }
@@ -488,12 +547,17 @@ class MemoryDB {
     );
   }
 
+  getSentRequests(userId: string): FriendRequest[] {
+    return this.data.friendRequests.filter(
+      (r) => r.senderId === userId && r.status === 'pending'
+    );
+  }
+
   sendFriendRequest(senderId: string, receiverId: string): FriendRequest | null {
     const sender = this.getUserById(senderId);
     const receiver = this.getUserById(receiverId);
     if (!sender || !receiver) return null;
 
-    // Check existing
     const existing = this.data.friendRequests.find(
       (r) => r.senderId === senderId && r.receiverId === receiverId && r.status === 'pending'
     );
@@ -511,7 +575,6 @@ class MemoryDB {
 
     this.data.friendRequests.push(request);
 
-    // Create notification
     this.createNotification({
       userId: receiverId,
       type: 'friend_request',
@@ -530,20 +593,17 @@ class MemoryDB {
 
     request.status = 'accepted';
 
-    // Add to friendships
     this.data.friendships.push({
       user1Id: request.senderId,
       user2Id: request.receiverId,
       createdAt: new Date().toISOString(),
     });
 
-    // Update friend counts
     const u1 = this.getUserById(request.senderId);
     const u2 = this.getUserById(request.receiverId);
     if (u1) u1.friendsCount += 1;
     if (u2) u2.friendsCount += 1;
 
-    // Send accept notification
     if (u2) {
       this.createNotification({
         userId: request.senderId,
@@ -596,6 +656,13 @@ class MemoryDB {
     return false;
   }
 
+  getBlockedUsers(userId: string): User[] {
+    const blockedIds = this.data.blocks
+      .filter((b) => b.blockerId === userId)
+      .map((b) => b.blockedId);
+    return this.data.users.filter((u) => blockedIds.includes(u.id));
+  }
+
   // --- Friend Discovery ---
   discoverFriends(currentUserId: string, options?: { city?: string; interest?: string; search?: string }): User[] {
     const friends = this.getFriends(currentUserId).map((f) => f.id);
@@ -611,7 +678,7 @@ class MemoryDB {
       list = list.filter((u) => u.city?.toLowerCase() === options.city?.toLowerCase() || u.location?.toLowerCase().includes(options.city?.toLowerCase() || ''));
     }
 
-    if (options?.interest) {
+    if (options?.interest && options.interest !== 'All') {
       list = list.filter((u) => u.interests.some((i) => i.toLowerCase() === options.interest?.toLowerCase()));
     }
 
@@ -632,6 +699,7 @@ class MemoryDB {
   // --- Posts ---
   getPosts(currentUserId?: string): Post[] {
     return this.data.posts
+      .filter((p) => !p.isHidden)
       .map((p) => {
         const author = this.getUserById(p.userId) || p.author;
         return {
@@ -694,7 +762,7 @@ class MemoryDB {
 
   getComments(postId: string): PostComment[] {
     return this.data.comments
-      .filter((c) => c.postId === postId)
+      .filter((c) => c.postId === postId && !c.isHidden)
       .map((c) => ({
         ...c,
         author: this.getUserById(c.userId) || c.author,
@@ -878,19 +946,123 @@ class MemoryDB {
 
   // --- Ads ---
   getAds(): Advertisement[] {
+    return this.data.ads.filter((a) => a.isActive);
+  }
+
+  getAllAds(): Advertisement[] {
     return this.data.ads;
   }
 
-  // --- Moderation ---
-  report(item: { targetType: 'user' | 'post' | 'message'; targetId: string; reporterId: string; reason: string; details?: string }): ReportItem {
+  createAd(ad: Omit<Advertisement, 'id' | 'createdAt' | 'impressions' | 'clicks'>): Advertisement {
+    const newAd: Advertisement = {
+      id: `ad_${Date.now()}`,
+      ...ad,
+      impressions: 0,
+      clicks: 0,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.ads.unshift(newAd);
+    this.saveToDisk();
+    return newAd;
+  }
+
+  updateAd(id: string, updates: Partial<Advertisement>): Advertisement | null {
+    const idx = this.data.ads.findIndex((a) => a.id === id);
+    if (idx === -1) return null;
+    this.data.ads[idx] = { ...this.data.ads[idx], ...updates };
+    this.saveToDisk();
+    return this.data.ads[idx];
+  }
+
+  deleteAd(id: string): boolean {
+    const idx = this.data.ads.findIndex((a) => a.id === id);
+    if (idx !== -1) {
+      this.data.ads.splice(idx, 1);
+      this.saveToDisk();
+      return true;
+    }
+    return false;
+  }
+
+  // --- Moderation & Reports ---
+  getReports(): ReportItem[] {
+    return this.data.reports.map((r) => ({
+      ...r,
+      reporter: this.getUserById(r.reporterId) || r.reporter,
+    }));
+  }
+
+  report(item: { targetType: 'user' | 'post' | 'comment' | 'message'; targetId: string; reporterId: string; reason: string; details?: string }): ReportItem {
     const rep: ReportItem = {
       id: `rep_${Date.now()}`,
       ...item,
+      status: 'pending',
+      actionTaken: 'none',
       createdAt: new Date().toISOString(),
     };
-    this.data.reports.push(rep);
+    this.data.reports.unshift(rep);
     this.saveToDisk();
     return rep;
+  }
+
+  resolveReport(reportId: string, action: ReportItem['actionTaken'], adminUser: User): boolean {
+    const report = this.data.reports.find((r) => r.id === reportId);
+    if (!report) return false;
+
+    report.status = 'resolved';
+    report.actionTaken = action;
+    report.resolvedBy = adminUser.name;
+    report.resolvedAt = new Date().toISOString();
+
+    // Execute action
+    if (action === 'hidden' || action === 'removed') {
+      if (report.targetType === 'post') {
+        const p = this.data.posts.find((post) => post.id === report.targetId);
+        if (p) p.isHidden = true;
+      } else if (report.targetType === 'comment') {
+        const c = this.data.comments.find((comm) => comm.id === report.targetId);
+        if (c) c.isHidden = true;
+      }
+    } else if (action === 'banned') {
+      if (report.targetType === 'user') {
+        const u = this.getUserById(report.targetId);
+        if (u) u.isBanned = true;
+      }
+    }
+
+    // Add audit log
+    this.addAuditLog({
+      adminId: adminUser.id,
+      adminName: adminUser.name,
+      action: `RESOLVE_REPORT_${action?.toUpperCase()}`,
+      targetType: report.targetType,
+      targetId: report.targetId,
+      details: `Report ${reportId} resolved with action ${action}. Reason: ${report.reason}`,
+    });
+
+    this.saveToDisk();
+    return true;
+  }
+
+  dismissReport(reportId: string, adminUser: User): boolean {
+    const report = this.data.reports.find((r) => r.id === reportId);
+    if (!report) return false;
+
+    report.status = 'dismissed';
+    report.resolvedBy = adminUser.name;
+    report.resolvedAt = new Date().toISOString();
+
+    this.addAuditLog({
+      adminId: adminUser.id,
+      adminName: adminUser.name,
+      action: 'DISMISS_REPORT',
+      targetType: report.targetType,
+      targetId: report.targetId,
+      details: `Report ${reportId} dismissed as not violating guidelines.`,
+    });
+
+    this.saveToDisk();
+    return true;
   }
 
   blockUser(blockerId: string, blockedId: string): void {
@@ -900,7 +1072,6 @@ class MemoryDB {
         blockedId,
         createdAt: new Date().toISOString(),
       });
-      // Remove any friendships
       this.removeFriend(blockerId, blockedId);
       this.saveToDisk();
     }
@@ -913,9 +1084,37 @@ class MemoryDB {
       this.saveToDisk();
     }
   }
+
+  // --- Audit Logs ---
+  getAuditLogs(): AuditLogItem[] {
+    return this.data.auditLogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  addAuditLog(log: Omit<AuditLogItem, 'id' | 'createdAt'>): AuditLogItem {
+    const newLog: AuditLogItem = {
+      id: `audit_${Date.now()}`,
+      ...log,
+      createdAt: new Date().toISOString(),
+    };
+    this.data.auditLogs.unshift(newLog);
+    this.saveToDisk();
+    return newLog;
+  }
+
+  // --- Admin Overview Stats ---
+  getAdminStats() {
+    return {
+      totalUsers: this.data.users.length,
+      activeUsers: this.data.users.filter((u) => u.isOnline).length,
+      totalPosts: this.data.posts.length,
+      pendingReports: this.data.reports.filter((r) => r.status === 'pending').length,
+      totalAds: this.data.ads.length,
+      activeAds: this.data.ads.filter((a) => a.isActive).length,
+      totalConversations: this.data.conversations.length,
+    };
+  }
 }
 
-// Global singleton instance
 const globalForDb = global as unknown as { dbInstance?: MemoryDB };
 export const db = globalForDb.dbInstance ?? new MemoryDB();
 if (process.env.NODE_ENV !== 'production') globalForDb.dbInstance = db;

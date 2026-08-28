@@ -13,9 +13,6 @@ import {
   Bell,
   User,
   Settings,
-  Sparkles,
-  Compass,
-  Bookmark,
   LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -25,7 +22,8 @@ export const DesktopSidebar: React.FC = () => {
   const { t } = useI18n();
   const { user, logout } = useAuth();
 
-  const mainLinks = [
+  // Section 1: Main Feed & Social Core
+  const coreLinks = [
     {
       href: '/',
       label: t('nav.home'),
@@ -50,11 +48,15 @@ export const DesktopSidebar: React.FC = () => {
       icon: Bell,
       isActive: pathname.startsWith('/notifications'),
     },
+  ];
+
+  // Section 2: Account & Preferences
+  const accountLinks = [
     {
       href: '/profile',
       label: t('nav.profile'),
       icon: User,
-      isActive: pathname.startsWith('/profile'),
+      isActive: pathname === '/profile',
     },
     {
       href: '/settings',
@@ -70,7 +72,7 @@ export const DesktopSidebar: React.FC = () => {
       {user && (
         <Link
           href="/profile"
-          className="flex items-center gap-3 p-3.5 rounded-3xl bg-white dark:bg-dark-card border border-slate-200/60 dark:border-slate-800/80 hover:border-primary-500/40 dark:hover:border-primary-500/40 transition-all shadow-sm mb-4 group"
+          className="flex items-center gap-3 p-3.5 rounded-3xl bg-white dark:bg-dark-card border border-slate-200/60 dark:border-slate-800/80 hover:border-primary-500/40 dark:hover:border-primary-500/40 transition-all shadow-sm mb-3 group"
         >
           <Avatar
             src={user.avatar}
@@ -88,9 +90,39 @@ export const DesktopSidebar: React.FC = () => {
         </Link>
       )}
 
-      {/* Main Navigation Links */}
-      <nav className="space-y-1.5 flex-1">
-        {mainLinks.map((item) => {
+      {/* Section 1: Main Navigation Links */}
+      <nav className="space-y-1">
+        {coreLinks.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-semibold transition-all group',
+                item.isActive
+                  ? 'bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 shadow-sm border border-primary-100 dark:border-primary-900/40'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-card hover:text-slate-900 dark:hover:text-white'
+              )}
+            >
+              <Icon
+                className={cn(
+                  'w-5 h-5 transition-transform duration-200 group-hover:scale-110',
+                  item.isActive ? 'text-primary-600 dark:text-primary-400 stroke-[2.5]' : 'text-slate-400'
+                )}
+              />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Clean Section Divider */}
+      <div className="my-3 border-t border-slate-200/60 dark:border-slate-800/60" />
+
+      {/* Section 2: Profile & Settings Links */}
+      <nav className="space-y-1 flex-1">
+        {accountLinks.map((item) => {
           const Icon = item.icon;
           return (
             <Link
@@ -116,7 +148,7 @@ export const DesktopSidebar: React.FC = () => {
       </nav>
 
       {/* Footer Info & Logout */}
-      <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/60 space-y-2">
+      <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800/60 space-y-2">
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors font-medium"
@@ -124,9 +156,14 @@ export const DesktopSidebar: React.FC = () => {
           <LogOut className="w-4 h-4" />
           <span>{t('nav.logout')}</span>
         </button>
-        <p className="text-[11px] text-slate-400 px-4">
-          Friend Social © 2026 Laos 🇱🇦
-        </p>
+        <div className="flex items-center justify-between text-[11px] text-slate-400 px-4">
+          <span>GUKGIC © 2026</span>
+          <div className="flex gap-2">
+            <Link href="/terms" className="hover:underline">Terms</Link>
+            <span>•</span>
+            <Link href="/privacy" className="hover:underline">Privacy</Link>
+          </div>
+        </div>
       </div>
     </aside>
   );

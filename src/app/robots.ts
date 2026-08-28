@@ -1,14 +1,14 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = 'https://friend-social.la';
+  const baseUrl = 'https://gukgic.la';
 
   return {
     rules: [
       {
         userAgent: '*',
-        allow: ['/', '/friends', '/u/'],
-        disallow: ['/messages/', '/notifications', '/settings', '/api/'],
+        allow: ['/', '/friends', '/u/', '/terms', '/privacy', '/about'],
+        disallow: ['/messages/', '/notifications', '/settings', '/admin/', '/api/'],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

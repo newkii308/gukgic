@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       friendsCount: 0,
       postsCount: 0,
       isOnline: true,
+      role: 'user',
       createdAt: new Date().toISOString(),
     };
 

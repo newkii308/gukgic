@@ -2,21 +2,22 @@ import { MetadataRoute } from 'next';
 import { db } from '@/lib/db';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://friend-social.la';
+  const baseUrl = 'https://gukgic.la';
+
   const users = db.getUsers();
 
-  const userUrls = users.map((user) => ({
+  const userUrls: MetadataRoute.Sitemap = users.map((user) => ({
     url: `${baseUrl}/u/${user.username}`,
-    lastModified: new Date(),
-    changeFrequency: 'daily' as const,
+    lastModified: new Date(user.createdAt),
+    changeFrequency: 'weekly',
     priority: 0.8,
   }));
 
-  return [
+  const staticUrls: MetadataRoute.Sitemap = [
     {
       url: baseUrl,
       lastModified: new Date(),
-      changeFrequency: 'hourly',
+      changeFrequency: 'daily',
       priority: 1.0,
     },
     {
@@ -25,6 +26,25 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'daily',
       priority: 0.9,
     },
-    ...userUrls,
+    {
+      url: `${baseUrl}/about`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/terms`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/privacy`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
   ];
+
+  return [...staticUrls, ...userUrls];
 }

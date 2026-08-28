@@ -1,5 +1,15 @@
 export type LanguageCode = 'lo' | 'en' | 'th' | 'zh' | 'vi';
 export type ThemeMode = 'light' | 'dark' | 'system';
+export type UserRole = 'user' | 'moderator' | 'admin';
+
+export interface UserSettings {
+  profileVisibility: 'public' | 'friends' | 'private';
+  postVisibility: 'public' | 'friends';
+  whoCanSendRequests: 'everyone' | 'friends_of_friends';
+  pushNotifications: boolean;
+  messageNotifications: boolean;
+  socialNotifications: boolean;
+}
 
 export interface User {
   id: string;
@@ -16,6 +26,10 @@ export interface User {
   postsCount: number;
   isOnline: boolean;
   lastSeen?: string;
+  role: UserRole;
+  isBanned?: boolean;
+  isSuspended?: boolean;
+  settings?: UserSettings;
   createdAt: string;
   mutualFriendsCount?: number;
 }
@@ -43,6 +57,7 @@ export interface Post {
   commentsCount: number;
   sharesCount: number;
   isLiked?: boolean;
+  isHidden?: boolean;
   createdAt: string;
 }
 
@@ -52,6 +67,7 @@ export interface PostComment {
   userId: string;
   author: User;
   content: string;
+  isHidden?: boolean;
   createdAt: string;
 }
 
@@ -103,14 +119,34 @@ export interface Advertisement {
   ctaText: string;
   targetUrl: string;
   badge?: string;
+  isActive: boolean;
+  impressions?: number;
+  clicks?: number;
+  createdAt: string;
 }
 
 export interface ReportItem {
   id: string;
-  targetType: 'user' | 'post' | 'message';
+  targetType: 'user' | 'post' | 'comment' | 'message';
   targetId: string;
   reporterId: string;
+  reporter?: User;
   reason: string;
   details?: string;
+  status: 'pending' | 'resolved' | 'dismissed';
+  actionTaken?: 'none' | 'hidden' | 'removed' | 'warned' | 'suspended' | 'banned';
+  resolvedBy?: string;
+  resolvedAt?: string;
+  createdAt: string;
+}
+
+export interface AuditLogItem {
+  id: string;
+  adminId: string;
+  adminName: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  details: string;
   createdAt: string;
 }
