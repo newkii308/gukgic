@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
   const friends = db.getFriends(user.id);
   const requests = db.getPendingRequests(user.id);
+  const sentRequests = db.getSentRequests(user.id);
 
-  return NextResponse.json({ friends, requests });
+  return NextResponse.json({ friends, requests, sentRequests });
 }
