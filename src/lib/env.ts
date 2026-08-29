@@ -5,11 +5,13 @@ const envSchema = z.object({
   PORT: z.string().optional().default('3000'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters in production').optional(),
   DATABASE_URL: z.string().optional(),
+  REDIS_URL: z.string().optional(),
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET_NAME: z.string().optional(),
   R2_PUBLIC_URL: z.string().optional(),
+  SENTRY_DSN: z.string().optional(),
 });
 
 export function validateEnv() {

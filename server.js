@@ -1,33 +1,19 @@
 const { createServer } = require('http');
-const fs = require('fs');
-const path = require('path');
 const next = require('next');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
+const Redis = require('ioredis');
+const { createAdapter } = require('@socket.io/redis-adapter');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || 'localhost';
 const port = parseInt(process.env.PORT || '3000', 10);
-const JWT_SECRET = process.env.JWT_SECRET || 'gukgic-lao-social-jwt-secret-key-2026-genz';
+const JWT_SECRET = process.env.JWT_SECRET || (dev ? 'gukgic-dev-jwt-secret-key-change-in-prod-2026' : null);
 
+const prisma = new PrismaClient();
 const app = next({ dev, hostname, port, dir: __dirname });
 const handle = app.getRequestHandler();
-
-const dbPath = path.join(__dirname, '.data', 'gukgic_database.json');
-
-function isConversationMember(conversationId, userId) {
-  try {
-    if (!fs.existsSync(dbPath)) return true;
-    const raw = fs.readFileSync(dbPath, 'utf8');
-    const data = JSON.parse(raw);
-    if (!data.conversationMembers) return true;
-    return data.conversationMembers.some(
-      (m) => m.conversationId === conversationId && m.userId === userId
-    );
-  } catch {
-    return true;
-  }
-}
 
 function parseCookies(cookieHeader) {
   const list = {};
@@ -42,7 +28,24 @@ function parseCookies(cookieHeader) {
   return list;
 }
 
-app.prepare().then(() => {
+async function isConversationMember(conversationId, userId) {
+  try {
+    const member = await prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId,
+          userId,
+        },
+      },
+    });
+    return Boolean(member);
+  } catch (err) {
+    console.error('Error verifying conversation membership:', err);
+    return false;
+  }
+}
+
+app.prepare().then(async () => {
   const server = createServer(async (req, res) => {
     try {
       const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost:3000'}`);
@@ -68,9 +71,22 @@ app.prepare().then(() => {
     },
   });
 
+  // Optional Redis Adapter for multi-instance horizontal scaling
+  if (process.env.REDIS_URL) {
+    try {
+      const pubClient = new Redis(process.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 });
+      const subClient = pubClient.duplicate();
+      await Promise.all([pubClient.connect(), subClient.connect()]);
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('✓ Socket.IO Redis Adapter initialized successfully');
+    } catch (err) {
+      console.warn('⚠️ Redis not available for Socket adapter, running in single-node mode');
+    }
+  }
+
   const onlineUsers = new Map(); // socket.id -> userId
 
-  // Socket.IO Authentication Middleware
+  // Strict JWT Authentication Middleware for Socket.IO
   io.use((socket, next) => {
     try {
       const cookieHeader = socket.handshake.headers.cookie;
@@ -78,10 +94,6 @@ app.prepare().then(() => {
       const token = cookies['gukgic_token'] || cookies['friend_token'] || socket.handshake.auth?.token;
 
       if (!token) {
-        if (dev && socket.handshake.query.userId) {
-          socket.data.userId = socket.handshake.query.userId;
-          return next();
-        }
         return next(new Error('Authentication required'));
       }
 
@@ -109,9 +121,11 @@ app.prepare().then(() => {
       io.emit('user_online', { userId, isOnline: true });
     }
 
-    socket.on('join_conversation', ({ conversationId }) => {
+    // Join conversation room (verifying database membership first)
+    socket.on('join_conversation', async ({ conversationId }) => {
       if (!conversationId || !userId) return;
-      if (isConversationMember(conversationId, userId)) {
+      const isMember = await isConversationMember(conversationId, userId);
+      if (isMember) {
         socket.join(conversationId);
       }
     });
@@ -122,18 +136,21 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on('send_message', (data) => {
-      if (!data || !data.conversationId || !userId) return;
-      if (isConversationMember(data.conversationId, userId)) {
-        data.senderId = userId;
-        socket.to(data.conversationId).emit('new_message', data);
+    // Typing event indicator
+    socket.on('typing', async ({ conversationId, isTyping }) => {
+      if (!conversationId || !userId) return;
+      const isMember = await isConversationMember(conversationId, userId);
+      if (isMember) {
+        socket.to(conversationId).emit('user_typing', { userId, isTyping: Boolean(isTyping) });
       }
     });
 
-    socket.on('typing', ({ conversationId, isTyping }) => {
-      if (!conversationId || !userId) return;
-      if (isConversationMember(conversationId, userId)) {
-        socket.to(conversationId).emit('user_typing', { userId, isTyping: Boolean(isTyping) });
+    // Realtime broadcast of canonical persisted message (Message is already persisted by HTTP API)
+    socket.on('broadcast_message', async (data) => {
+      if (!data || !data.conversationId || !userId) return;
+      const isMember = await isConversationMember(data.conversationId, userId);
+      if (isMember) {
+        socket.to(data.conversationId).emit('new_message', data);
       }
     });
 
