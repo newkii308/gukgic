@@ -132,7 +132,7 @@ export const NativePush = {
     }
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
-      return 'web-push-token-demo';
+      return `push_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     }
     return null;
   }

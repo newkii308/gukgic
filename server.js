@@ -5,9 +5,9 @@ const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = process.env.HOSTNAME || 'localhost';
 const port = parseInt(process.env.PORT || '3000', 10);
-const JWT_SECRET = process.env.JWT_SECRET || (dev ? 'gukgic-dev-jwt-secret-key-change-in-prod-2026' : null);
+const JWT_SECRET = process.env.JWT_SECRET || 'gukgic-lao-social-jwt-secret-key-2026-genz';
 
 const prisma = new PrismaClient();
 const app = next({ dev, hostname, port, dir: __dirname });
