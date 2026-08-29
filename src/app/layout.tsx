@@ -3,6 +3,7 @@ import './globals.css';
 import { ThemeProvider } from '@/hooks/use-theme';
 import { I18nProvider } from '@/hooks/use-i18n';
 import { AuthProvider } from '@/hooks/use-auth';
+import { QueryProvider } from '@/components/providers/query-provider';
 import { AppShell } from '@/components/layout/app-shell';
 
 export const metadata: Metadata = {
@@ -64,7 +65,9 @@ export default function RootLayout({
         <ThemeProvider>
           <I18nProvider>
             <AuthProvider>
-              <AppShell>{children}</AppShell>
+              <QueryProvider>
+                <AppShell>{children}</AppShell>
+              </QueryProvider>
             </AuthProvider>
           </I18nProvider>
         </ThemeProvider>
